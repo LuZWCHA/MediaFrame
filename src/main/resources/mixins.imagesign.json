@@ -1,0 +1,14 @@
+{
+  "package": "top.nowandfuture.mod.imagesign.mixin",
+  "required": true,
+  "mixins": [
+  ],
+  "client": [
+    "MixinEditSignScreen",
+    "MixinSignTileEntityRenderer",
+    "MixinSignTileEntity"
+  ],
+  "server": [],
+  "minVersion": "0.8",
+  "refmap": "mixins.imagesign.refmap.json"
+}
