@@ -1,8 +1,13 @@
 package top.nowandfuture.mod.imagesign.utils;
 
+import net.minecraft.client.renderer.texture.NativeImage;
+import org.lwjgl.BufferUtils;
+
 import java.awt.*;
 import java.awt.color.ColorSpace;
 import java.awt.image.*;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Optional;
 
@@ -32,7 +37,21 @@ public class ImageUtils {
         return newImage;
     }
 
-    public BufferedImage toGray(BufferedImage srcImg){
+    public static BufferedImage convert2RGB(BufferedImage image) {
+        ColorSpace colorSpace = ColorSpace.getInstance(ColorSpace.CS_sRGB);
+
+        ColorModel colorModel = new ComponentColorModel(
+                colorSpace, false, false, Transparency.OPAQUE,
+                DataBuffer.TYPE_BYTE);
+
+        BufferedImageOp converter = new ColorConvertOp(colorSpace, null);
+        BufferedImage newImage =
+                converter.createCompatibleDestImage(image, colorModel);
+        converter.filter(image, newImage);
+        return newImage;
+    }
+
+    public BufferedImage convert2Gray(BufferedImage srcImg){
         return new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_sRGB), null).filter(srcImg, null);
     }
 
@@ -41,54 +60,31 @@ public class ImageUtils {
         return converter.filter(image, null);
     }
 
-    /**
-     * 将已有Image复制新的一份出来
-     *
-     * @param img             {@link Image}
-     * @param imageType       目标图片类型，{@link BufferedImage}中的常量，例如黑白等
-     * @param backgroundColor 背景色，{@code null} 表示默认背景色（黑色或者透明）
-     * @return {@link BufferedImage}
-     * @see BufferedImage#TYPE_INT_RGB
-     * @see BufferedImage#TYPE_INT_ARGB
-     * @see BufferedImage#TYPE_INT_ARGB_PRE
-     * @see BufferedImage#TYPE_INT_BGR
-     * @see BufferedImage#TYPE_3BYTE_BGR
-     * @see BufferedImage#TYPE_4BYTE_ABGR
-     * @see BufferedImage#TYPE_4BYTE_ABGR_PRE
-     * @see BufferedImage#TYPE_BYTE_GRAY
-     * @see BufferedImage#TYPE_USHORT_GRAY
-     * @see BufferedImage#TYPE_BYTE_BINARY
-     * @see BufferedImage#TYPE_BYTE_INDEXED
-     * @see BufferedImage#TYPE_USHORT_565_RGB
-     * @see BufferedImage#TYPE_USHORT_555_RGB
-     * @since 4.5.17
-     */
+
     public static BufferedImage copyImage(Image img, int imageType, Color backgroundColor) {
-        final BufferedImage bimage = new BufferedImage(img.getWidth(null), img.getHeight(null), imageType);
-        final Graphics2D bGr = createGraphics(bimage, backgroundColor);
+        final BufferedImage bufferedImage = new BufferedImage(img.getWidth(null), img.getHeight(null), imageType);
+        final Graphics2D bGr = createGraphics(bufferedImage, backgroundColor);
         bGr.drawImage(img, 0, 0, null);
         bGr.dispose();
 
-        return bimage;
+        return bufferedImage;
     }
 
-    /**
-     * 创建{@link Graphics2D}
-     *
-     * @param image {@link BufferedImage}
-     * @param color {@link Color}背景颜色以及当前画笔颜色，{@code null}表示不设置背景色
-     * @return {@link Graphics2D}
-     * @since 4.5.2
-     */
     public static Graphics2D createGraphics(BufferedImage image, Color color) {
-        final Graphics2D g = image.createGraphics();
+        final Graphics2D graphics = image.createGraphics();
 
         if (null != color) {
-            // 填充背景
-            g.setColor(color);
-            g.fillRect(0, 0, image.getWidth(), image.getHeight());
+            graphics.setColor(color);
+            graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
         }
 
-        return g;
+        return graphics;
+    }
+
+    public static NativeImage createMinecraftImage(BufferedImage image) throws IOException {
+        NativeImage nativeImage = new NativeImage(image.getWidth(), image.getHeight(), true);
+        ByteBuffer buffer = BufferUtils.createByteBuffer(image.getHeight() * image.getWidth() * 4);
+        buffer.put(((DataBufferByte) (image.getData().getDataBuffer())).getData());
+        return NativeImage.read(NativeImage.PixelFormat.RGBA, buffer);
     }
 }

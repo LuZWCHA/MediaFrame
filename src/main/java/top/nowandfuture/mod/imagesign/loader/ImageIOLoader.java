@@ -1,4 +1,4 @@
-package top.nowandfuture.mod.imagesign;
+package top.nowandfuture.mod.imagesign.loader;
 
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
@@ -58,13 +58,14 @@ public class ImageIOLoader implements ImageLoader {
             ImageReader reader = ImageIO.getReader(ImageType.GIF);
             return get(reader, format.getExtension(), path.toFile());
         } else if (!format.equals(ImageType.UNKNOWN)) {
-            try {
-                BufferedImage bufferedImage = ImageIO.read(path.toFile());
-                if (bufferedImage != null) {
-                    return new ImageData(format.getExtension(), null, bufferedImage);
-                }
+            BufferedImage bufferedImage = null;
+            try (FileInputStream fileInputStream = new FileInputStream(path.toFile())){
+                 bufferedImage = ImageIO.read(fileInputStream);
             }catch (Exception ignored){
 
+            }
+            if (bufferedImage != null) {
+                return new ImageData(format.getExtension(), null, bufferedImage);
             }
             throw new RuntimeException("Image cannot be read by ImageIO, " +
                     "the format not supported or the image file is not completed.");
@@ -74,6 +75,7 @@ public class ImageIOLoader implements ImageLoader {
     }
 
     private ImageData get(ImageReader reader, String format, File file) throws Exception {
+        ImageData res = null;
         try (InputStream inputStream = new FileInputStream(file)) {
             reader.read(inputStream);
             List<BufferedImage> bufferedImages = reader.getFrames();
@@ -82,10 +84,12 @@ public class ImageIOLoader implements ImageLoader {
                 if (reader instanceof GIFReader) {
                     otherInfo = ((GIFReader) reader).getGIFFrames();
                 }
-                return new ImageData(format, otherInfo, bufferedImages);
+                res = new ImageData(format, otherInfo, bufferedImages);
             }
+        }finally {
+
         }
-        return null;
+        return res;
     }
 
     @Override
@@ -105,8 +109,8 @@ public class ImageIOLoader implements ImageLoader {
         File file = null;
 
         int temp = 0;
-        long mills = 100;
-        long maxWait = 5 * 1000;
+        final long mills = 100;
+        final long maxWait = 5 * 1000;
 
         while (temp < retry) {
             try {

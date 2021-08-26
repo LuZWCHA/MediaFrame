@@ -58,7 +58,6 @@ public class RenderHelper {
                     .build(false));
 
 
-    public static float lastEyeHeight = 0;
     public static Vector4f getEntityRenderPos(Entity entityIn, double partialTicks) {
 
         final float renderX = (float) MathHelper.lerp(partialTicks, entityIn.lastTickPosX, entityIn.getPosX());

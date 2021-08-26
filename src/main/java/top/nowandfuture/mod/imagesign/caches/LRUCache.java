@@ -1,4 +1,4 @@
-package top.nowandfuture.mod.imagesign;
+package top.nowandfuture.mod.imagesign.caches;
 
 
 import org.jetbrains.annotations.Nullable;
@@ -18,14 +18,14 @@ class LRUCache<K,V> extends LinkedHashMap<K,V>{
         return eldest;
     }
 
-    Map.Entry<K,V> eldest;
+    private Map.Entry<K,V> eldest;
     @Override
     protected boolean removeEldestEntry(Map.Entry<K,V> eldest) {
         boolean outer = size() > capacity;
         if(outer && put){
             this.eldest = eldest;
         }else{
-            eldest = null;
+            this.eldest = null;
         }
         return outer;
     }

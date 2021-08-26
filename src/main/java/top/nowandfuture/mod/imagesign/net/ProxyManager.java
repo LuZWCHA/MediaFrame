@@ -7,16 +7,14 @@ public enum ProxyManager {
     private Proxy proxy;
 
     ProxyManager(){
-//        proxy = new Proxy(Strings.EMPTY, Strings.EMPTY, Strings.EMPTY);
-        proxy = new Proxy("127.0.0.1", Strings.EMPTY, Strings.EMPTY);
-        proxy.setHttpPort(7890);
+        proxy = new Proxy(Strings.EMPTY, Strings.EMPTY, Strings.EMPTY);
     }
 
-    public void setProxy(Proxy proxy) {
+    public synchronized void setProxy(Proxy proxy) {
         this.proxy = proxy;
     }
 
-    public Proxy getProxy() {
+    public synchronized Proxy getProxy() {
         return proxy;
     }
 

@@ -1,9 +1,15 @@
-package top.nowandfuture.mod.imagesign;
+package top.nowandfuture.mod.imagesign.loader;
 
+import com.mojang.blaze3d.systems.IRenderCall;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.math.vector.Vector3d;
+import org.lwjgl.system.MemoryStack;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.spi.LoggerFactoryBinder;
+import top.nowandfuture.mod.imagesign.caches.ImageEntity;
+import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 import top.nowandfuture.mod.imagesign.utils.Utils;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
@@ -27,30 +33,30 @@ public enum ImageFetcher {
     INSTANCE;
 
     private SaveConfig config;
-    private final DistanceList list;
+    private final ImageEntityCache list;
 
     private ImageLoader loader;
     private final Logger logger;
 
-    private Set<String> blackUrls;
+    private final Set<String> blackUrls;
 
     ImageFetcher(){
         //default config
-        this(new SaveConfig(100, 100 * 1024 * 1024,
-                Minecraft.getInstance().gameDir.getAbsolutePath(), "image_temps","image_temps2"));
+        this(new SaveConfig(Minecraft.getInstance().gameDir.getAbsolutePath(), "image_temps","image_temps2"));
     }
 
     ImageFetcher(@NonNull SaveConfig config){
-        logger =  LoggerFactory.getLogger(getClass());
-        list = new DistanceList(config.cacheMaxSize, config.cacheMemoryLimit);
+        this.config = config;
+        this.logger =  LoggerFactory.getLogger(getClass());
+        this.list = new ImageEntityCache(config.cacheMaxSize, config.imageMaxSize, config.cacheMemoryLimit);
         //default image loader
-        loader = new ImageIOLoader();
-        blackUrls = new HashSet<>();
+        this.loader = new ImageIOLoader();
+        this.blackUrls = new HashSet<>();
 
-        logger.debug("Initializing image fetcher..., the config setting is: {}",config);
+        this.logger.info("Initializing image fetcher..., the config setting is: {}",config);
     }
 
-    public DistanceList getCache() {
+    public ImageEntityCache getCache() {
         return list;
     }
 
@@ -59,24 +65,47 @@ public enum ImageFetcher {
         config.orgImageSaveDir = dirName;
     }
 
-    public ImageEntity grabImage(String url){
-        return checkCache(url).blockingFirst(ImageEntity.EMPTY);
+    public ImageEntity grabImage(String url, BlockPos pos){
+        return checkCache(url, pos).blockingFirst(ImageEntity.EMPTY);
     }
 
-    public synchronized void clear(String url, boolean deleteFile) {
+    public void dispose(){
+        if(RenderSystem.isOnRenderThreadOrInit()){
+            list.dispose();
+            blackUrls.clear();
+        }else{
+            RenderSystem.recordRenderCall(new IRenderCall() {
+                @Override
+                public void execute() {
+                    dispose();
+                }
+            });
+        }
+
+    }
+
+    public void reload(){
+        logger.info("Reload GLSources: {} images to reload.", list.size());
+        list.markUpdate();
+    }
+
+    public MemoryStack memoryStack(){
+        return list.memoryStack();
+    }
+
+    public void clear(String url, boolean deleteFile) {
         if(list.contain(url)){
-            list.remove(url);
+            if(deleteFile){
+                try {
+                    deleteTempFile(url);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            list.removeImage(url);
         }
 
         blackUrls.remove(url);
-
-        if(deleteFile){
-            try {
-                deleteTempFile(url);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
     }
 
     public @NonNull Observable<ImageEntity> get(String url, BlockPos blockPos, Scheduler curSch){
@@ -88,18 +117,20 @@ public enum ImageFetcher {
                 .doOnError(new Consumer<Throwable>() {
                     @Override
                     public void accept(Throwable throwable) throws Throwable {
-                        logger.debug("Observer stream: ", throwable);
+                        logger.info("Observer stream: ", throwable);
                     }
                 });
     }
 
-    private Observable<ImageEntity> checkCache(String url){
+    private Observable<ImageEntity> checkCache(String url, BlockPos pos){
         return Observable.create(new ObservableOnSubscribe<ImageEntity>() {
             @Override
             public void subscribe(ObservableEmitter<ImageEntity> e) throws Exception {
                 if(getCache().contain(url)) {
                     logger.debug("Find the image: {}", url);
-                    e.onNext(getCache().get(url));
+                    ImageEntity entity = getCache().get(url);
+                    entity.merge(url, pos);
+                    e.onNext(entity);
                 }
                 e.onComplete();
             }
@@ -114,10 +145,10 @@ public enum ImageFetcher {
                 Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
                 ImageLoader.ImageData data = loadFromDisk(diskPath);
                 if (data != null) {
-                    logger.debug("Loading image: {}", url);
+                    logger.info("Loading image: {}", url);
                     ImageEntity entity = ImageEntity.create(url, blockPos, data);
                     entity.setImageInfo(data.getImageInfo());
-                    logger.debug("Caching image: {}", url);
+                    logger.info("Caching image: {}", url);
                     ImageEntity added = list.add(entity);
                     if(added.equals(ImageEntity.EMPTY)){
                         entity.dispose();
@@ -128,7 +159,7 @@ public enum ImageFetcher {
                                                 list.getLeftMemory(), entity.imageInfo.getSize())));
                         return;
                     }else{
-                        logger.debug("Cached image: {}", url);
+                        logger.info("Cached image: {}", url);
                         e.onNext(entity);
                     }
                 }
@@ -148,22 +179,22 @@ public enum ImageFetcher {
                 if(!parentDir.exists()){
                     Files.createDirectories(parentDir.toPath());
                 }
-                logger.debug("Downloading image: {}", url);
+                logger.info("Downloading image: {}", url);
                 File file = loader.fetch(url, diskPath.toFile());
                 if (file != null) {
-                    logger.debug("Loading image: {}", url);
+                    logger.info("Loading image: {}", url);
                     ImageLoader.ImageData data = loadFromDisk(diskPath);
                     if(data != null) {
                         ImageEntity entity = ImageEntity.create(url, blockPos, data);
                         entity.setImageInfo(data.getImageInfo());
-                        logger.debug("Caching image: {}", url);
+                        logger.info("Caching image: {}", url);
                         ImageEntity added = list.add(entity);
                         if(added.equals(ImageEntity.EMPTY)){
                             entity.dispose();
                             e.tryOnError(new OutOfMemoryError("out of memory of Cache: cache left memory is " +
                                     list.getLeftMemory() + "the image entry is " + entity.imageInfo.getSize()));
                         }else{
-                            logger.debug("Cached image: {}", url);
+                            logger.info("Cached image: {}", url);
                             e.onNext(entity);
                             e.onComplete();
                         }
@@ -217,6 +248,20 @@ public enum ImageFetcher {
         blackUrls.remove(url);
     }
 
+    public void refresh(BlockPos pos){
+        ImageEntity entity = list.findByPos(pos);
+        if(entity != null && entity != ImageEntity.EMPTY){
+            clear(entity.url, true);
+        }
+    }
+
+    public void reRender(BlockPos pos){
+        ImageEntity entity = list.findByPos(pos);
+        if(entity != null && entity != ImageEntity.EMPTY){
+            entity.markUpdate();
+        }
+    }
+
     public boolean isInBlackList(String url){
         return blackUrls.contains(url);
     }
@@ -231,6 +276,24 @@ public enum ImageFetcher {
         public String defaultDiskSavePath;
         public String orgImageSaveDir;
         public String thumbnailSaveDir;
+        public long imageMaxSize;
+
+        private static final long DEFAULT_IMAGE_MAX_SIZE = 4L << 20;
+        private static final int DEFAULT_CACHE_MAX_SIZE = 100;
+        private static final long DEFAULT_CACHE_MEMORY_LIMIT = 200L << 20;
+
+        public SaveConfig(String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir){
+            this(DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_MEMORY_LIMIT, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir, DEFAULT_IMAGE_MAX_SIZE);
+        }
+
+        public SaveConfig(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir, long imageMaxSize) {
+            this.cacheMaxSize = cacheMaxSize;
+            this.cacheMemoryLimit = cacheMemoryLimit;
+            this.defaultDiskSavePath = defaultDiskSavePath;
+            this.orgImageSaveDir = orgImageSaveDir;
+            this.thumbnailSaveDir = thumbnailSaveDir;
+            this.imageMaxSize = imageMaxSize;
+        }
 
         public SaveConfig(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir) {
             this.cacheMaxSize = cacheMaxSize;

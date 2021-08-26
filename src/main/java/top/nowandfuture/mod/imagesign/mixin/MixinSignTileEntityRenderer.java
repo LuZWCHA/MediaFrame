@@ -9,49 +9,70 @@ import net.minecraft.block.WallSignBlock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screen.EditSignScreen;
 import net.minecraft.client.renderer.IRenderTypeBuffer;
+import net.minecraft.client.renderer.texture.Texture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.renderer.tileentity.SignTileEntityRenderer;
 import net.minecraft.tileentity.SignTileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.vector.Vector3f;
+import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
-import top.nowandfuture.mod.imagesign.ImageEntity;
-import top.nowandfuture.mod.imagesign.ImageFetcher;
-import top.nowandfuture.mod.imagesign.OpenGLImage;
+import top.nowandfuture.mod.imagesign.caches.ImageEntity;
+import top.nowandfuture.mod.imagesign.caches.OpenGLImage;
+import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
+import top.nowandfuture.mod.imagesign.loader.SignImageLoadManager;
 import top.nowandfuture.mod.imagesign.schedulers.OpenGLScheduler;
-import top.nowandfuture.mod.imagesign.SignImageLoadManager;
 import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 
 @Mixin(SignTileEntityRenderer.class)
 public abstract class MixinSignTileEntityRenderer {
 
-    private void renderImages(ImageEntity imageEntity, SignTileEntity tileEntityIn, int width, int height, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn, int combinedOverlayIn) {
+    private long frame = Minecraft.getInstance().getFrameTimer().getIndex();
+
+    private void renderImages(ImageEntity imageEntity, SignTileEntity tileEntityIn, double width, double height, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn, int combinedOverlayIn) {
         BlockState blockstate = tileEntityIn.getBlockState();
-        matrixStackIn.push();
+//        if(imageEntity.checkShader(ImageSign.getShaderLoaded())){
+//            //shader changed.
+//            ResourceLocation location = new ResourceLocation(
+//                    String.valueOf(tileEntityIn.getPos().toLong())
+//            );
+//            TextureManager manager = Minecraft.getInstance().getTextureManager();
+//            manager.deleteTexture(location);
+//            return;
+//        }
 
         if (imageEntity.getOrgImages().size() == 1) {
             OpenGLImage entity = imageEntity.getOrgImages().get(0);
             ResourceLocation location = new ResourceLocation(
-                    tileEntityIn.getPos().getCoordinatesAsString().replace(", ", "/")
+                    String.valueOf(tileEntityIn.getPos().toLong())
             );
-            TextureManager manager = Minecraft.getInstance().textureManager;
-            if (manager.getTexture(location) == null) {
-                manager.loadTexture(
-                        location,
-                        entity
-                );
+            TextureManager manager = Minecraft.getInstance().getTextureManager();
+            Texture texture = manager.getTexture(location);
+            manager.loadTexture(
+                    location,
+                    entity
+            );
+            if (texture == null) {
+                return;
+            }else{
+                boolean isT = GL11.glIsTexture(texture.getGlTextureId());
+
+                if(!isT){
+                    System.out.println(texture.getGlTextureId() + ", " + isT);
+                    return;
+                }
             }
 
             int w = entity.getWidth();
             int h = entity.getHeight();
-            float wd = (float) w / width;
-            float hd = (float) h / height;
-            float d = Math.max(wd, hd);
-            float scale = d;
+            float wd = w / (float) width;
+            float hd = h / (float) height;
+            float scale = Math.max(wd, hd);
+            matrixStackIn.push();
 
             matrixStackIn.translate(.5, .5, .5);
             if (blockstate.getBlock() instanceof StandingSignBlock) {
@@ -63,10 +84,15 @@ public abstract class MixinSignTileEntityRenderer {
                 matrixStackIn.translate(0.0D, -0.2725D, -0.4375D);
                 //0 -30 42
             }
+
+            if(scale == wd){
+                matrixStackIn.translate(0,-(height - h / scale) / 2,0);
+            }else{
+                matrixStackIn.translate((width - w / scale) / 2, 0, 0);
+            }
+
             matrixStackIn.translate(-.5 , 0.7725F, .046666667F);
             matrixStackIn.scale(1 / scale, -1 / scale, 1 / scale);
-//        matrixStackIn.translate(0.0D, (double) 32F, (double) 44.8F);
-//            matrixStackIn.scale(d, d, 1);
 
             RenderHelper.blit2(matrixStackIn,
                     0, 0, 0, 0, 0f,
@@ -81,12 +107,14 @@ public abstract class MixinSignTileEntityRenderer {
 
     @Inject(method = "render",
             at = @At(
-                    value = "TAIL"
+                    value = "HEAD"
             ),
-            locals = LocalCapture.CAPTURE_FAILSOFT
-    )
+            locals = LocalCapture.CAPTURE_FAILSOFT,
+            cancellable = true)
     public void inject_render(SignTileEntity tileEntityIn, float partialTicks, MatrixStack matrixStackIn, IRenderTypeBuffer bufferIn, int combinedLightIn, int combinedOverlayIn, CallbackInfo callbackInfo) {
-        if (Minecraft.getInstance().currentScreen instanceof EditSignScreen)
+        if (Minecraft.getInstance().currentScreen != null &&
+                Minecraft.getInstance().currentScreen instanceof EditSignScreen
+                || Minecraft.getInstance().world == null)
             return;
 
         String header = tileEntityIn.getText(0).getString();
@@ -99,8 +127,8 @@ public abstract class MixinSignTileEntityRenderer {
                 return;
             }
 
-            ImageEntity imageEntity = fetcher.grabImage(url);
-            if (imageEntity != null && !imageEntity.equals(ImageEntity.EMPTY)) {
+            ImageEntity imageEntity = fetcher.grabImage(url, tileEntityIn.getPos());
+            if (imageEntity != null && !ImageEntity.EMPTY.equals(imageEntity)) {
                 //do render
                 if (!imageEntity.isUploading() && !imageEntity.hasOpenGLSource()) {
                     imageEntity.uploadImage(false);
@@ -120,11 +148,23 @@ public abstract class MixinSignTileEntityRenderer {
                     } catch (NumberFormatException ignored) {
 
                     }
+                    double width = 1, height = 1;
 
+                    if(pars.size() >= 2){
+                        if(pars.getDouble(0) > 0){
+                            width = pars.getDouble(0);
+                        }
+
+                        if(pars.getDouble(1) > 0){
+                            height = pars.getDouble(1);
+                        }
+                    }
                     int[] lights = RenderHelper.decodeCombineLight(combinedLightIn);
                     combinedLightIn = RenderHelper.getCombineLight(lights[0], lights[1], light);
 
-                    renderImages(imageEntity, tileEntityIn, 1, 1, partialTicks, matrixStackIn, bufferIn, combinedLightIn, combinedOverlayIn);
+                    renderImages(imageEntity, tileEntityIn, width, height, partialTicks, matrixStackIn, bufferIn, combinedLightIn, combinedOverlayIn);
+
+                    callbackInfo.cancel();
                 }
             } else {
                 SignImageLoadManager loadManager = SignImageLoadManager.INSTANCE;
@@ -140,7 +180,7 @@ public abstract class MixinSignTileEntityRenderer {
                                     }, throwable -> {
                                         loadManager.removeFromLoadingList(tileEntityIn);
                                         fetcher.addToBlackList(url);
-
+                                        throwable.printStackTrace();
                                     }, () -> {
                                         loadManager.removeFromLoadingList(tileEntityIn);
                                     });

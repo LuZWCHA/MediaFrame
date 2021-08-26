@@ -27,11 +27,4 @@ public class Utils {
             return Strings.EMPTY;
         }
     }
-
-    public static void main(String[] args) {
-        String en = md5("https://blog.csdn.net/u011781521/article/details/77932321https://blog.csdn.net/u011781521/article/details/77932321https://blog.csdn.net/u011781521/article/details/77932321https://blog.csdn.net/u011781521/article/details/77932321");
-//        String de = decryptAES(en);
-
-        System.out.println(en);
-    }
 }

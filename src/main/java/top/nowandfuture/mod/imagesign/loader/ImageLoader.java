@@ -1,4 +1,4 @@
-package top.nowandfuture.mod.imagesign;
+package top.nowandfuture.mod.imagesign.loader;
 
 import jdk.nashorn.internal.ir.debug.ObjectSizeCalculator;
 
@@ -50,6 +50,10 @@ public interface ImageLoader {
             return imageInfo.imageFormat;
         }
 
+        public BufferedImage[] getImages() {
+            return images;
+        }
+
         public ImageInfo getImageInfo() {
             return imageInfo;
         }
@@ -64,8 +68,7 @@ public interface ImageLoader {
         }
 
         private long checkMemory(Object obj){
-            long size = ObjectSizeCalculator.getObjectSize(obj);
-            return size;
+            return ObjectSizeCalculator.getObjectSize(obj);
         }
 
     }

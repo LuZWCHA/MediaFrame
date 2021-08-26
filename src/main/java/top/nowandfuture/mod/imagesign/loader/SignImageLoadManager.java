@@ -1,4 +1,4 @@
-package top.nowandfuture.mod.imagesign;
+package top.nowandfuture.mod.imagesign.loader;
 
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.minecraft.tileentity.SignTileEntity;
@@ -11,7 +11,7 @@ import java.util.function.BiConsumer;
 
 public enum SignImageLoadManager {
     INSTANCE;
-    Map<SignTileEntity, Disposable> signTileEntityListMap;
+    private final Map<SignTileEntity, Disposable> signTileEntityListMap;
 
     SignImageLoadManager(){
         signTileEntityListMap = new HashMap<>();
@@ -22,12 +22,13 @@ public enum SignImageLoadManager {
     }
 
     public void addToLoadingList(SignTileEntity entity, Disposable disposable){
-        if(!isLoading(entity))
+        if(!isLoading(entity)) {
             signTileEntityListMap.put(entity, disposable);
+        }
     }
 
     public void removeFromLoadingList(SignTileEntity entity){
-        signTileEntityListMap.remove(entity).dispose();
+        signTileEntityListMap.remove(entity);
     }
 
     public boolean tryRemoveFromLoadingList(SignTileEntity entity){
