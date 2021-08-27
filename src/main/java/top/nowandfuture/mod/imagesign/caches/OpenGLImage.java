@@ -88,7 +88,7 @@ public class OpenGLImage extends Texture {
         lock.lock();
         if (bufferedImage != null) {
             Observable.just(bufferedImage)
-                    .observeOn(Schedulers.computation())
+                    .observeOn(Schedulers.io())
                     .map(new Function<BufferedImage, ImageUpload>() {
                         @Override
                         public ImageUpload apply(BufferedImage image) throws Throwable {
@@ -107,11 +107,10 @@ public class OpenGLImage extends Texture {
                             if (image.getColorModel().hasAlpha()) {
                                 channel = 4;
                             }
-                            bufferedImage = image;
+//                            bufferedImage = image;
                             Raster raster = image.getRaster();
                             byte[] data = (byte[]) raster.getDataElements(0, 0, image.getWidth(), image.getHeight(), null);
 
-//                            byte[] data = ((DataBufferByte) raster.getDataBuffer()).getData();
                             return ImageUpload.create(data, image.getWidth(), image.getHeight(), channel);
                         }
                     })
@@ -119,10 +118,6 @@ public class OpenGLImage extends Texture {
                     .map(new Function<ImageUpload, Boolean>() {
                         @Override
                         public Boolean apply(ImageUpload image) throws Throwable {
-//                            Raster raster = bufferedImage.getRaster();
-//                            byte[] data = (byte[])raster.getDataElements(0, 0, bufferedImage.getWidth(), bufferedImage.getHeight(), null);
-//
-//                            ImageUpload image = ImageUpload.create(data, bufferedImage.getWidth(), bufferedImage.getHeight(), bufferedImage.getColorModel().hasAlpha() ? 4: 3);
                             return uploadImageInner(image.data, image.w, image.h, image.channel, deleteMemory);
                         }
                     })

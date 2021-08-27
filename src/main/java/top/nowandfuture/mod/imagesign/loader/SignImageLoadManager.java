@@ -7,6 +7,7 @@ import net.minecraft.world.IWorld;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
 public enum SignImageLoadManager {
@@ -14,7 +15,7 @@ public enum SignImageLoadManager {
     private final Map<SignTileEntity, Disposable> signTileEntityListMap;
 
     SignImageLoadManager(){
-        signTileEntityListMap = new HashMap<>();
+        signTileEntityListMap = new ConcurrentHashMap<>();
     }
 
     public boolean isLoading(SignTileEntity entity){
@@ -28,7 +29,10 @@ public enum SignImageLoadManager {
     }
 
     public void removeFromLoadingList(SignTileEntity entity){
-        signTileEntityListMap.remove(entity);
+        Disposable disposable = signTileEntityListMap.remove(entity);
+        if(disposable != null){
+            disposable.dispose();
+        }
     }
 
     public boolean tryRemoveFromLoadingList(SignTileEntity entity){
@@ -43,8 +47,9 @@ public enum SignImageLoadManager {
         signTileEntityListMap.forEach(new BiConsumer<SignTileEntity, Disposable>() {
             @Override
             public void accept(SignTileEntity entity, Disposable disposable) {
-                if(world == entity.getWorld())
+                if(world == entity.getWorld()){
                     disposable.dispose();
+                }
             }
         });
 

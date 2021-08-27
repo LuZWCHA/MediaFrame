@@ -89,10 +89,6 @@ public enum ImageFetcher {
         list.markUpdate();
     }
 
-//    public MemoryStack memoryStack(){
-//        return list.memoryStack();
-//    }
-
     public void clear(String url, boolean deleteFile) {
         if(list.contain(url)){
             if(deleteFile){
@@ -117,7 +113,11 @@ public enum ImageFetcher {
                 .doOnError(new Consumer<Throwable>() {
                     @Override
                     public void accept(Throwable throwable) throws Throwable {
-                        logger.info("Observer stream: ", throwable);
+                        if(throwable instanceof OutOfMemoryError){
+                            logger.debug("check the config to expand the memory: ", throwable);
+                        }else {
+                            logger.info("Observer stream: ", throwable);
+                        }
                     }
                 });
     }
@@ -143,21 +143,21 @@ public enum ImageFetcher {
             public void subscribe(ObservableEmitter<ImageEntity> e) throws Exception {
                 String name = encodeUrl(url);
                 Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
+                logger.info("Loading image: {}", url);
                 ImageLoader.ImageData data = loadFromDisk(diskPath);
                 if (data != null) {
-                    logger.info("Loading image: {}", url);
                     ImageEntity entity = ImageEntity.create(url, blockPos, data);
+                    logger.info("Image loaded: {}", url);
+
                     entity.setImageInfo(data.getImageInfo());
                     logger.info("Caching image: {}", url);
                     ImageEntity added = list.add(entity);
                     if(added.equals(ImageEntity.EMPTY)){
-                        entity.dispose();
                         e.tryOnError(
                                 new OutOfMemoryError(
                                         String.format("Out of memory of Cache: cache left memory is %d bytes, " +
                                                         "but the object entry's size is %d bytes.",
                                                 list.getLeftMemory(), entity.imageInfo.getSize())));
-                        return;
                     }else{
                         logger.info("Cached image: {}", url);
                         e.onNext(entity);
@@ -190,7 +190,6 @@ public enum ImageFetcher {
                         logger.info("Caching image: {}", url);
                         ImageEntity added = list.add(entity);
                         if(added.equals(ImageEntity.EMPTY)){
-                            entity.dispose();
                             e.tryOnError(new OutOfMemoryError("out of memory of Cache: cache left memory is " +
                                     list.getLeftMemory() + "the image entry is " + entity.imageInfo.getSize()));
                         }else{
@@ -284,6 +283,8 @@ public enum ImageFetcher {
 
         public SaveConfig(String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir){
             this(DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_MEMORY_LIMIT, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir, DEFAULT_IMAGE_MAX_SIZE);
+            //Do test
+//            this(2, 2 << 20, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir, DEFAULT_IMAGE_MAX_SIZE);
         }
 
         public SaveConfig(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir, long imageMaxSize) {
@@ -306,9 +307,12 @@ public enum ImageFetcher {
         @Override
         public String toString() {
             return "SaveConfig{" +
-                    "defaultDiskSavePath='" + defaultDiskSavePath + '\'' +
+                    "cacheMaxSize=" + cacheMaxSize +
+                    ", cacheMemoryLimit=" + cacheMemoryLimit +
+                    ", defaultDiskSavePath='" + defaultDiskSavePath + '\'' +
                     ", orgImageSaveDir='" + orgImageSaveDir + '\'' +
                     ", thumbnailSaveDir='" + thumbnailSaveDir + '\'' +
+                    ", imageMaxSize=" + imageMaxSize +
                     '}';
         }
     }

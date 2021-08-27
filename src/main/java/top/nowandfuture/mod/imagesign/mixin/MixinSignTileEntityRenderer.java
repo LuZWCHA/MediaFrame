@@ -189,8 +189,14 @@ public abstract class MixinSignTileEntityRenderer {
 
                                     }, throwable -> {
                                         loadManager.removeFromLoadingList(tileEntityIn);
-                                        fetcher.addToBlackList(url);
-                                        throwable.printStackTrace();
+                                        //Thr url or the image is load successful buy limit by the memory,
+                                        //We may cache them next time.
+                                        if(!(throwable instanceof OutOfMemoryError)) {
+                                            fetcher.addToBlackList(url);
+                                        }else{
+                                            // TODO: 2021/8/28 expand the cache or resize the image
+                                        }
+
                                     }, () -> {
                                         loadManager.removeFromLoadingList(tileEntityIn);
                                     });

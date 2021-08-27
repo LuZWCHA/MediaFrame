@@ -86,7 +86,7 @@ public class ImageSign {
                 if(refresh)
                     ImageFetcher.INSTANCE.reRender(blockPos);
                 else{
-//                    SignImageLoadManager.INSTANCE.clear(world);
+                    SignImageLoadManager.INSTANCE.clear(world);
                     ImageFetcher.INSTANCE.refresh(blockPos);
                 }
             }
