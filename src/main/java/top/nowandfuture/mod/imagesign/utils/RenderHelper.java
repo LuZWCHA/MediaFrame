@@ -200,11 +200,12 @@ public class RenderHelper {
     }
 
     public static void innerBlit2(MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int light, ResourceLocation id) {
-        innerBlit2(stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, 0, light, id);
+        innerBlit2(stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, -1, light, id);
     }
 
     public static void innerBlit2(MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {
-        innerBlit2(stack.getLast().getMatrix(), stack.getLast().getNormal(), x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, nx, ny, nz, light, id);
+        MatrixStack.Entry entry = stack.getLast();
+        innerBlit2(entry.getMatrix(), entry.getNormal(), x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, nx, ny, nz, light, id);
     }
 
     private static void innerBlit2(Matrix4f matrix, Matrix3f normalMatrix, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {

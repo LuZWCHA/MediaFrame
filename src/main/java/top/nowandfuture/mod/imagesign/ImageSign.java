@@ -1,33 +1,29 @@
 package top.nowandfuture.mod.imagesign;
 
+import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.block.AbstractSignBlock;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.Entity;
-import net.minecraft.resources.IResourceManagerReloadListener;
-import net.minecraft.tileentity.TileEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.event.RenderWorldLastEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.world.WorldEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.LogicalSide;
-import net.minecraftforge.fml.ModList;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.loading.FMLLoader;
-import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.SignImageLoadManager;
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
-import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 
 @Mod("imagesign")
 public class ImageSign {
@@ -38,7 +34,7 @@ public class ImageSign {
     public ImageSign(){
         MinecraftForge.EVENT_BUS.register(this);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, Config.CLIENT_CONFIG);
-
+        RenderQueue.init(50, 2);
         INSTANCE = this;
     }
 
@@ -68,6 +64,7 @@ public class ImageSign {
         if(event.getWorld().isRemote()){
             SignImageLoadManager.INSTANCE.clear(event.getWorld());
             ImageFetcher.INSTANCE.dispose();
+            RenderQueue.clearQueue();
         }
     }
 
@@ -98,6 +95,14 @@ public class ImageSign {
 
     @OnlyIn(Dist.CLIENT)
     @SubscribeEvent
+    public void onWorldLastRender(RenderWorldLastEvent renderWorldLastEvent) {
+        RenderQueue.doTasks();
+        RenderQueue.updateQuerySet();
+        RenderQueue.FRAME_COUNT ++;
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    @SubscribeEvent
     public void oClientTick(TickEvent event) {
         // do something when the server starts
         if(event.phase == TickEvent.Phase.START && event.side == LogicalSide.CLIENT){
@@ -114,8 +119,15 @@ public class ImageSign {
 
                     if(count >= 0 && lastCountReset != count){
                         lastCountReset = count;
-                        SignImageLoadManager.INSTANCE.clear(entity.world);
-                        ImageFetcher.INSTANCE.dispose();
+
+                        RenderSystem.recordRenderCall(new IRenderCall() {
+                            @Override
+                            public void execute() {
+                                SignImageLoadManager.INSTANCE.clear(entity.world);
+                                ImageFetcher.INSTANCE.reload();
+                            }
+                        });
+
                     }
                 }
             }

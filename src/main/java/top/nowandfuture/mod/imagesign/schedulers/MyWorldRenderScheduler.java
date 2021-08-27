@@ -3,20 +3,21 @@ package top.nowandfuture.mod.imagesign.schedulers;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.disposables.Disposable;
 import net.minecraft.client.Minecraft;
+import top.nowandfuture.mod.imagesign.RenderQueue;
 
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class MinecraftScheduler extends Scheduler{
+public class MyWorldRenderScheduler extends Scheduler{
 
-    private static final MinecraftScheduler INSTANCE = new MinecraftScheduler();
+    private static final MyWorldRenderScheduler INSTANCE = new MyWorldRenderScheduler();
 
-    /* package for unit test */MinecraftScheduler() {
+    /* package for unit test */MyWorldRenderScheduler() {
     }
 
-    public static MinecraftScheduler mainThread() {
+    public static MyWorldRenderScheduler mainThread() {
         return INSTANCE;
     }
 
@@ -28,7 +29,7 @@ public class MinecraftScheduler extends Scheduler{
 
     @Override
     public Worker createWorker() {
-        return new MinecraftScheduler.MinecraftWorker();
+        return new MyWorker();
     }
 
     /**
@@ -39,11 +40,11 @@ public class MinecraftScheduler extends Scheduler{
      * Recursive actions are not preferred and inserted at the tail of the queue as any other action would be
      * The Worker will only schedule a single job with {@link Minecraft#execute(Runnable)} for when the queue was previously empty
      */
-    private static class MinecraftWorker extends Scheduler.Worker implements Runnable {
-        private volatile MinecraftWorker.QueuedRunnable head = new MinecraftWorker.QueuedRunnable(null); /// only advanced in run(), initialised with a starter element
-        private final AtomicReference<MinecraftWorker.QueuedRunnable> tail = new AtomicReference<>(head); /// points to the last element, null when disposed
+    private static class MyWorker extends Scheduler.Worker implements Runnable {
+        private volatile MyWorker.QueuedRunnable head = new MyWorker.QueuedRunnable(null); /// only advanced in run(), initialised with a starter element
+        private final AtomicReference<MyWorker.QueuedRunnable> tail = new AtomicReference<>(head); /// points to the last element, null when disposed
 
-        private static class QueuedRunnable extends AtomicReference<MinecraftWorker.QueuedRunnable> implements Disposable, Runnable {
+        private static class QueuedRunnable extends AtomicReference<MyWorker.QueuedRunnable> implements Disposable, Runnable {
             private volatile Runnable action;
 
             private QueuedRunnable(Runnable action) {
@@ -73,7 +74,7 @@ public class MinecraftScheduler extends Scheduler{
         @Override
         public void dispose() {
             tail.set(null);
-            MinecraftWorker.QueuedRunnable qr = this.head;
+            MyWorker.QueuedRunnable qr = this.head;
             while (qr != null) {
                 qr.dispose();
                 qr = qr.getAndSet(null);
@@ -90,7 +91,7 @@ public class MinecraftScheduler extends Scheduler{
             long delay = Math.max(0, unit.toMillis(delayTime));
             assertThatTheDelayIsValidForTheTimer(delay);
 
-            final MinecraftWorker.QueuedRunnable queuedRunnable = new MinecraftWorker.QueuedRunnable(action);
+            final MyWorker.QueuedRunnable queuedRunnable = new MyWorker.QueuedRunnable(action);
             if (delay == 0) { // delay is too small for the java timer, schedule it without delay
                 return schedule(queuedRunnable);
             }
@@ -102,7 +103,6 @@ public class MinecraftScheduler extends Scheduler{
                     schedule(queuedRunnable);
                 }
             }, delay);
-
 
             return Disposable.fromRunnable(() -> {
                 queuedRunnable.dispose();
@@ -117,9 +117,9 @@ public class MinecraftScheduler extends Scheduler{
                 return Disposable.disposed();
             }
 
-            final MinecraftWorker.QueuedRunnable queuedRunnable = action instanceof MinecraftWorker.QueuedRunnable ? (MinecraftWorker.QueuedRunnable) action : new MinecraftWorker.QueuedRunnable(action);
+            final MyWorker.QueuedRunnable queuedRunnable = action instanceof MyWorker.QueuedRunnable ? (MyWorker.QueuedRunnable) action : new MyWorker.QueuedRunnable(action);
 
-            MinecraftWorker.QueuedRunnable tailPivot;
+            MyWorker.QueuedRunnable tailPivot;
             do {
                 tailPivot = tail.get();
             } while (tailPivot != null && !tailPivot.compareAndSet(null, queuedRunnable));
@@ -129,7 +129,10 @@ public class MinecraftScheduler extends Scheduler{
             } else {
                 tail.compareAndSet(tailPivot, queuedRunnable); // can only fail with a concurrent dispose and we don't want to override the disposed value
                 if (tailPivot == head) {
-                    Minecraft.getInstance().execute(this);
+                    boolean success = RenderQueue.tryAddTask(this);
+                    if(!success){
+                        return Disposable.disposed();
+                    }
                 }
             }
             return queuedRunnable;
@@ -137,7 +140,7 @@ public class MinecraftScheduler extends Scheduler{
 
         @Override
         public void run() {
-            for (MinecraftWorker.QueuedRunnable qr = head.get(); qr != null; qr = qr.get()) {
+            for (MyWorker.QueuedRunnable qr = head.get(); qr != null; qr = qr.get()) {
                 qr.run();
                 head = qr;
             }

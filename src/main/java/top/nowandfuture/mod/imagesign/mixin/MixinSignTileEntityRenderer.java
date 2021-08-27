@@ -12,6 +12,7 @@ import net.minecraft.client.renderer.IRenderTypeBuffer;
 import net.minecraft.client.renderer.texture.Texture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.client.renderer.tileentity.SignTileEntityRenderer;
+import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.tileentity.SignTileEntity;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.vector.Vector3f;
@@ -21,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+import top.nowandfuture.mod.imagesign.RenderQueue;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.OpenGLImage;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
@@ -129,10 +131,18 @@ public abstract class MixinSignTileEntityRenderer {
 
             ImageEntity imageEntity = fetcher.grabImage(url, tileEntityIn.getPos());
             if (imageEntity != null && !ImageEntity.EMPTY.equals(imageEntity)) {
-                //do render
+                RenderQueue.addNextFrameRenderObj(imageEntity, tileEntityIn.getPos(), tileEntityIn.getPos().distanceSq(TileEntityRendererDispatcher.instance.renderInfo.getBlockPos()));
+                if(!RenderQueue.isInPosSet(tileEntityIn.getPos())){
+                    //Too many tiles to render, don't render this one.
+                    //Or the one has not been added to the query set at the previous frame;
+                    //Render or upload texture next frame
+                    return;
+                }
+
                 if (!imageEntity.isUploading() && !imageEntity.hasOpenGLSource()) {
                     imageEntity.uploadImage(false);
                 } else if (imageEntity.hasOpenGLSource()) {
+                    //Do render
                     String pram = tileEntityIn.getText(2).getString();
                     String[] res = pram.split(",");
                     DoubleList pars = new DoubleArrayList();

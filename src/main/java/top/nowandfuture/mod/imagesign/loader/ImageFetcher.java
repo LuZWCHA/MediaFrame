@@ -89,9 +89,9 @@ public enum ImageFetcher {
         list.markUpdate();
     }
 
-    public MemoryStack memoryStack(){
-        return list.memoryStack();
-    }
+//    public MemoryStack memoryStack(){
+//        return list.memoryStack();
+//    }
 
     public void clear(String url, boolean deleteFile) {
         if(list.contain(url)){

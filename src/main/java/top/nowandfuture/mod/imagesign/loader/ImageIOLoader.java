@@ -61,8 +61,6 @@ public class ImageIOLoader implements ImageLoader {
             BufferedImage bufferedImage = null;
             try (FileInputStream fileInputStream = new FileInputStream(path.toFile())){
                  bufferedImage = ImageIO.read(fileInputStream);
-            }catch (Exception ignored){
-
             }
             if (bufferedImage != null) {
                 return new ImageData(format.getExtension(), null, bufferedImage);
