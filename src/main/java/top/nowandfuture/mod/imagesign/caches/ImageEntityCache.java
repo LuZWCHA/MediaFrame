@@ -1,18 +1,14 @@
 package top.nowandfuture.mod.imagesign.caches;
 
-import net.minecraft.client.Minecraft;
-import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.vector.Vector3d;
-import net.minecraft.util.math.vector.Vector3i;
 import org.jetbrains.annotations.NotNull;
 import top.nowandfuture.mod.imagesign.RenderQueue;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class ImageEntityCache {
     private Vector3d viewerPos;
@@ -24,6 +20,13 @@ public class ImageEntityCache {
     private final LRUCache<String, ImageEntity> cacheMap;
     private final Map<Long, ImageEntity> posQuickMap;
 
+    private CacheChangeListener cacheChangeListener;
+
+
+    public interface CacheChangeListener{
+        void remove(ImageEntity imageEntity, BlockPos... positions);
+        void add(ImageEntity imageEntity, BlockPos... positions);
+    }
 
     //reserve 10 MB memory
 //    private static byte[] memoryReserve = new byte[20 * 1024 * 1024];
@@ -38,8 +41,6 @@ public class ImageEntityCache {
         this.singleImageMaxSize = singleImageMaxSize;
     }
 
-
-
     public ImageEntity get(String url) {
         return cacheMap.get(url);
     }
@@ -52,7 +53,6 @@ public class ImageEntityCache {
             this.posDirty.set(true);
         }
     }
-
 
     public double removeFarthestEntities(long memorySize, double addedDistance, int a) {
         List<SortedImage> sortList = new ArrayList<>();
@@ -90,7 +90,7 @@ public class ImageEntityCache {
                     }
                 }
 
-                if(clearFlag) {
+                if (clearFlag) {
                     imageCounter.put(sortedImage.imageEntity, count + 1);
                 }
                 SortedImage.recycle(sortedImage);
@@ -98,7 +98,7 @@ public class ImageEntityCache {
 
             if (clearFlag && !sortList.isEmpty()) {
                 distance = sortList.get(0).distance;
-            }else if(!clearFlag) {
+            } else if (!clearFlag) {
                 imageCounter.forEach((ImageEntity imageEntity, Integer integer) -> {
                     removeImage(imageEntity.url);
                 });
@@ -107,8 +107,6 @@ public class ImageEntityCache {
             posDirty.set(false);
         }
 
-
-        sortList.clear();
         return distance;
     }
 
@@ -156,11 +154,12 @@ public class ImageEntityCache {
     public synchronized ImageEntity removeEntity(String url, BlockPos pos) {
         ImageEntity imageEntity = cacheMap.get(url);
         if (imageEntity != null) {
+            posQuickMap.remove(pos.toLong());
             imageEntity.posList.remove(pos);
+            removeEvent(imageEntity, pos);
             if (imageEntity.posList.isEmpty()) {
                 removeImage(url);
             }
-            posQuickMap.remove(pos.toLong());
 
         }
         return imageEntity;
@@ -169,12 +168,21 @@ public class ImageEntityCache {
     public synchronized ImageEntity removeImage(String url) {
         ImageEntity imageEntity = cacheMap.remove(url);
         if (imageEntity != null) {
-            removeAllPos(imageEntity.posList);
+            removeAllPosFromQuickQueryMap(imageEntity.posList);
             curMemory -= imageEntity.imageInfo.getSize();
-
+            //The posList may be empty
+            if(!imageEntity.posList.isEmpty()) {
+                removeEvent(imageEntity, (BlockPos[]) imageEntity.posList.toArray());
+            }
             imageEntity.dispose();
         }
         return imageEntity;
+    }
+
+    private void removeEvent(ImageEntity imageEntity, BlockPos... positions) {
+        if (cacheChangeListener != null) {
+            cacheChangeListener.remove(imageEntity, positions);
+        }
     }
 
     public synchronized boolean contain(String url) {
@@ -197,7 +205,7 @@ public class ImageEntityCache {
         return cacheMap.size();
     }
 
-    private void removeAllPos(List<BlockPos> posList) {
+    private void removeAllPosFromQuickQueryMap(List<BlockPos> posList) {
         for (BlockPos blockPos : posList) {
             posQuickMap.remove(blockPos.toLong());
         }
@@ -209,18 +217,20 @@ public class ImageEntityCache {
 
     public synchronized ImageEntity add(@NotNull ImageEntity entity) {
         long imageSize = entity.imageInfo.getSize();
-        if(imageSize > singleImageMaxSize){
+        if (imageSize > singleImageMaxSize) {
             return ImageEntity.EMPTY;
         }
 
-        //merge the position and use the new image data
+        //Merge the position and use the new image data:
+        //remove the old one first
         if (cacheMap.containsKey(entity.url)) {
             ImageEntity old = cacheMap.remove(entity.url);
-            old.dispose();
             //update positions
-            removeAllPos(old.posList);
+            removeAllPosFromQuickQueryMap(old.posList);
 
             curMemory -= imageSize;
+            removeEvent(old, (BlockPos[]) old.posList.toArray());
+            old.dispose();
         }
 
         if (curMemory + imageSize <= memoryLimit) {
@@ -229,13 +239,17 @@ public class ImageEntityCache {
             cacheMap.put(entity.url, entity);
             posQuickMap.put(entity.getFirstPos().toLong(), entity);
 
-            //remove eldest
+            addEvent(entity, (BlockPos[]) entity.posList.toArray());
+
+            //Dispose the eldest that be removed by map itself.
             if (removeEldest) {
                 Map.Entry<String, ImageEntity> entry = cacheMap.getEldest();
                 if (entry != null && !cacheMap.containsKey(entry.getKey())) {
                     //remove the eldest image if out of the capacity
+                    removeAllPosFromQuickQueryMap(entity.posList);
+
+                    removeEvent(entry.getValue(), (BlockPos[]) entry.getValue().posList.toArray());
                     entry.getValue().dispose();
-                    removeAllPos(entity.posList);
                 }
             }
 
@@ -267,16 +281,20 @@ public class ImageEntityCache {
         return ImageEntity.EMPTY;
     }
 
+    private void addEvent(ImageEntity entity, BlockPos... positions) {
+        if(cacheChangeListener != null){
+            cacheChangeListener.add(entity, positions);
+        }
+    }
+
     public synchronized void dispose() {
         cacheMap.forEach(new BiConsumer<String, ImageEntity>() {
             @Override
             public void accept(String s, ImageEntity imageEntity) {
                 imageEntity.dispose();
+
                 for (BlockPos blockPos : imageEntity.posList) {
-                    ResourceLocation location = new ResourceLocation(
-                            String.valueOf(blockPos.toLong())
-                    );
-                    Minecraft.getInstance().getTextureManager().deleteTexture(location);
+                    removeEvent(imageEntity);
                 }
             }
         });
@@ -286,118 +304,122 @@ public class ImageEntityCache {
         posDirty.set(true);
     }
 
-private static abstract class ObjectPool<T extends ObjectPool.IDispose> {
-    private final Queue<T> objects;
-
-    public ObjectPool() {
-        objects = new LinkedList<>();
+    public void setCacheChangeListener(CacheChangeListener cacheChangeListener) {
+        this.cacheChangeListener = cacheChangeListener;
     }
 
-    public T get() {
-        if (objects.isEmpty()) {
-            objects.add(createNew());
+    private static abstract class ObjectPool<T extends ObjectPool.IDispose> {
+        private final Queue<T> objects;
+
+        public ObjectPool() {
+            objects = new LinkedList<>();
         }
 
-        return objects.poll();
-    }
+        public T get() {
+            if (objects.isEmpty()) {
+                objects.add(createNew());
+            }
 
-    public void recycle(T t) {
-        if (!objects.contains(t)) {
-            t.dispose();
-            objects.add(t);
+            return objects.poll();
+        }
+
+        public void recycle(T t) {
+            if (!objects.contains(t)) {
+                t.dispose();
+                objects.add(t);
+            }
+        }
+
+        public void close() {
+            for (T object : objects) {
+                object.dispose();
+            }
+
+            objects.clear();
+        }
+
+        public abstract T createNew();
+
+        interface IDispose {
+            void dispose();
         }
     }
 
-    public void close() {
-        for (T object : objects) {
-            object.dispose();
+    public static class SortedImage implements Comparable<SortedImage>, ObjectPool.IDispose {
+        public static final SortedImagePool POOL = new SortedImagePool();
+
+        public ImageEntity imageEntity;
+        public long pos;
+        public double distance;
+
+        public SortedImage() {
+
         }
 
-        objects.clear();
-    }
+        private SortedImage(ImageEntity imageEntity, double distance, BlockPos pos) {
+            this.imageEntity = imageEntity;
+            this.distance = distance;
+            this.pos = pos.toLong();
+        }
 
-    public abstract T createNew();
-
-    interface IDispose {
-        void dispose();
-    }
-}
-
-public static class SortedImage implements Comparable<SortedImage>, ObjectPool.IDispose {
-    public static final SortedImagePool POOL = new SortedImagePool();
-
-    public ImageEntity imageEntity;
-    public long pos;
-    public double distance;
-
-    public SortedImage() {
-
-    }
-
-    private SortedImage(ImageEntity imageEntity, double distance, BlockPos pos) {
-        this.imageEntity = imageEntity;
-        this.distance = distance;
-        this.pos = pos.toLong();
-    }
-
-    public void set(ImageEntity imageEntity, BlockPos pos, double distance) {
-        this.imageEntity = imageEntity;
-        this.pos = pos.toLong();
-        this.distance = distance;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        SortedImage that = (SortedImage) o;
-
-        return imageEntity.equals(that.imageEntity);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
-    }
-
-    @Override
-    public int compareTo(@NotNull SortedImage o) {
-        double res = this.distance - o.distance;
-        if (res > 0) return 1;
-        else if (res < 0) return -1;
-        return 0;
-    }
-
-    @Override
-    public void dispose() {
-        imageEntity = null;
-        distance = -1;
-    }
-
-    public static SortedImage create() {
-        return POOL.get();
-    }
-
-    public static SortedImage create(ImageEntity imageEntity, BlockPos pos, double distance) {
-        SortedImage sortedImage = POOL.get();
-        sortedImage.set(imageEntity, pos, distance);
-        return sortedImage;
-    }
-
-    public static void recycle(SortedImage image) {
-        POOL.recycle(image);
-    }
-
-    public static class SortedImagePool extends ObjectPool<SortedImage> {
+        public void set(ImageEntity imageEntity, BlockPos pos, double distance) {
+            this.imageEntity = imageEntity;
+            this.pos = pos.toLong();
+            this.distance = distance;
+        }
 
         @Override
-        public SortedImage createNew() {
-            return new SortedImage();
-        }
-    }
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
 
-}
+            SortedImage that = (SortedImage) o;
+
+            return imageEntity.equals(that.imageEntity);
+        }
+
+        @Override
+        public int hashCode() {
+            return super.hashCode();
+        }
+
+        @Override
+        public int compareTo(@NotNull SortedImage o) {
+            double res = this.distance - o.distance;
+            if (res > 0) return 1;
+            else if (res < 0) return -1;
+            return 0;
+        }
+
+        @Override
+        public void dispose() {
+            imageEntity = null;
+            distance = -1;
+        }
+
+        public static SortedImage create() {
+            return POOL.get();
+        }
+
+        public static SortedImage create(ImageEntity imageEntity, BlockPos pos, double distance) {
+            SortedImage sortedImage = POOL.get();
+            sortedImage.set(imageEntity, pos, distance);
+            return sortedImage;
+        }
+
+        public static void recycle(SortedImage image) {
+            POOL.recycle(image);
+        }
+
+        public static class SortedImagePool extends ObjectPool<SortedImage> {
+
+            @Override
+            public SortedImage createNew() {
+                return new SortedImage();
+            }
+        }
+
+    }
 
     public long getCurMemory() {
         return curMemory;

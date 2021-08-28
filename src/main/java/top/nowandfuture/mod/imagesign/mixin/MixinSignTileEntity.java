@@ -28,14 +28,6 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
         if(world != null && world.isRemote()){
             SignImageLoadManager.INSTANCE.tryRemoveFromLoadingList((SignTileEntity) ((Object)this));
             ImageFetcher.INSTANCE.getCache().removeByBos(pos);
-            String url = getText(1).getString();
-            if(ImageFetcher.INSTANCE.isInBlackList(url)){
-                ImageFetcher.INSTANCE.removeFromBlackList(url);
-            }
-            ResourceLocation location = new ResourceLocation(
-                    String.valueOf(pos.toLong())
-            );
-            Minecraft.getInstance().getTextureManager().deleteTexture(location);
         }
     }
 
@@ -50,7 +42,8 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
     public void onChunkUnloaded() {
         super.onChunkUnloaded();
         if(world != null && world.isRemote()){
-
+            SignImageLoadManager.INSTANCE.tryRemoveFromLoadingList((SignTileEntity) ((Object)this));
+            ImageFetcher.INSTANCE.getCache().removeByBos(pos);
         }
     }
 

@@ -2,15 +2,6 @@ package top.nowandfuture.mod.imagesign.loader;
 
 import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
-import net.minecraft.client.Minecraft;
-import net.minecraft.util.math.vector.Vector3d;
-import org.lwjgl.system.MemoryStack;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.spi.LoggerFactoryBinder;
-import top.nowandfuture.mod.imagesign.caches.ImageEntity;
-import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
-import top.nowandfuture.mod.imagesign.utils.Utils;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableEmitter;
@@ -19,7 +10,14 @@ import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.functions.Action;
 import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.vector.Vector3d;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import top.nowandfuture.mod.imagesign.caches.ImageEntity;
+import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
+import top.nowandfuture.mod.imagesign.utils.Utils;
 
 import java.io.File;
 import java.io.IOException;
@@ -267,6 +265,10 @@ public enum ImageFetcher {
 
     public void onTick(Vector3d vector3d){
         list.updateViewerPos(vector3d);
+    }
+
+    public void setCacheListener(ImageEntityCache.CacheChangeListener listener){
+        list.setCacheChangeListener(listener);
     }
 
     public static class SaveConfig{

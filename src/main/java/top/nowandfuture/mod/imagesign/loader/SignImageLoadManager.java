@@ -10,9 +10,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
 
+//Thread Save
 public enum SignImageLoadManager {
     INSTANCE;
-    private final Map<SignTileEntity, Disposable> signTileEntityListMap;
+    private final ConcurrentHashMap<SignTileEntity, Disposable> signTileEntityListMap;
 
     SignImageLoadManager(){
         signTileEntityListMap = new ConcurrentHashMap<>();
@@ -44,16 +45,18 @@ public enum SignImageLoadManager {
     }
 
     public void clear(IWorld world) {
-        signTileEntityListMap.forEach(new BiConsumer<SignTileEntity, Disposable>() {
-            @Override
-            public void accept(SignTileEntity entity, Disposable disposable) {
-                if(world == entity.getWorld()){
-                    disposable.dispose();
+        synchronized (signTileEntityListMap) {
+            signTileEntityListMap.forEach(new BiConsumer<SignTileEntity, Disposable>() {
+                @Override
+                public void accept(SignTileEntity entity, Disposable disposable) {
+                    if (world == entity.getWorld()) {
+                        disposable.dispose();
+                    }
                 }
-            }
-        });
+            });
 
-        signTileEntityListMap.clear();
+            signTileEntityListMap.clear();
+        }
     }
 
     public void lazyClearRemovedEntities(){
