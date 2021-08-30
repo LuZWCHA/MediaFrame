@@ -1,8 +1,6 @@
 package top.nowandfuture.mod.imagesign;
 
 
-import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
-import it.unimi.dsi.fastutil.longs.LongOpenHashBigSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.util.math.BlockPos;
@@ -11,7 +9,6 @@ import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 
 import java.util.PriorityQueue;
 import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.LinkedBlockingDeque;
 
 public class RenderQueue {
@@ -21,7 +18,7 @@ public class RenderQueue {
     private static long exceptWaitTime = 2;
     private static int maxLimit = 20 , minLimit = 1;
 
-    private static final PriorityQueue<ImageEntityCache.SortedImage> distanceQueue = new PriorityQueue<>();
+    private static final PriorityQueue<ImageEntityCache.ImageWithDistance> distanceQueue = new PriorityQueue<>();
     private static final LongSet posSet = new LongOpenHashSet();
     private static long farthestPos = -1;
 
@@ -75,6 +72,8 @@ public class RenderQueue {
 
     public static void clearQueue(){
         queue.clear();
+        distanceQueue.clear();
+        posSet.clear();
     }
 
     public static Runnable poll(){
@@ -94,7 +93,7 @@ public class RenderQueue {
     }
 
     public static void addNextFrameRenderObj(ImageEntity entity, BlockPos pos, double distance){
-        distanceQueue.add(ImageEntityCache.SortedImage.create(entity, pos, distance));
+        distanceQueue.add(ImageEntityCache.ImageWithDistance.create(entity, pos, distance));
     }
 
     private static int maxRenderObjCount = 30;
@@ -102,14 +101,14 @@ public class RenderQueue {
         posSet.clear();
         int i = 0;
         while (!distanceQueue.isEmpty()){
-            ImageEntityCache.SortedImage sortedImage = distanceQueue.poll();
+            ImageEntityCache.ImageWithDistance imageWithDistance = distanceQueue.poll();
             if(i ++ < maxRenderObjCount) {
-                posSet.add(sortedImage.pos);
+                posSet.add(imageWithDistance.pos);
             }
             if(i == maxRenderObjCount){
-                farthestPos = sortedImage.pos;
+                farthestPos = imageWithDistance.pos;
             }
-            ImageEntityCache.SortedImage.recycle(sortedImage);
+            ImageEntityCache.ImageWithDistance.recycle(imageWithDistance);
         }
     }
 

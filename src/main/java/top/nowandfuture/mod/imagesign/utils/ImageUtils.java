@@ -5,6 +5,7 @@ import org.lwjgl.BufferUtils;
 
 import java.awt.*;
 import java.awt.color.ColorSpace;
+import java.awt.geom.AffineTransform;
 import java.awt.image.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -55,8 +56,11 @@ public class ImageUtils {
         return new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_sRGB), null).filter(srcImg, null);
     }
 
-    public static BufferedImage scale(BufferedImage image, float scale) {
-        BufferedImageOp converter = new RescaleOp(scale, 0, null);
+    public static BufferedImage scale(BufferedImage image, float scale, int interpolation) {
+        if(interpolation < AffineTransformOp.TYPE_NEAREST_NEIGHBOR || interpolation > AffineTransformOp.TYPE_BICUBIC){
+            interpolation = AffineTransformOp.TYPE_NEAREST_NEIGHBOR;
+        }
+        BufferedImageOp converter = new AffineTransformOp(AffineTransform.getScaleInstance(scale, scale), interpolation);
         return converter.filter(image, null);
     }
 

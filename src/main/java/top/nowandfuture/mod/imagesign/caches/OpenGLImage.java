@@ -6,27 +6,19 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.SingleObserver;
 import io.reactivex.rxjava3.functions.Action;
-import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.functions.Function;
 import io.reactivex.rxjava3.schedulers.Schedulers;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.texture.NativeImage;
 import net.minecraft.client.renderer.texture.Texture;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.resources.IResourceManager;
-import org.lwjgl.BufferUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
-import org.lwjgl.opengl.GL14;
-import org.lwjgl.opengl.GL20;
-import org.lwjgl.system.Checks;
-import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.schedulers.MyWorldRenderScheduler;
-import top.nowandfuture.mod.imagesign.schedulers.OpenGLScheduler;
 import top.nowandfuture.mod.imagesign.utils.ImageUtils;
 
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.Raster;
@@ -36,25 +28,40 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-import static org.lwjgl.opengl.GL14.GL_GENERATE_MIPMAP;
-import static org.lwjgl.opengl.GL14.GL_TEXTURE_LOD_BIAS;
 
 public class OpenGLImage extends Texture {
-    private static final int BYTES_PER_PIXEL = 4;
+    private static final Logger LOGGER = LogManager.getLogger(OpenGLImage.class);
+//    private static final  MemoryStack MEMORY_STACK;
+//
+//    static {
+//        MEMORY_STACK = MemoryStack.create(20 << 20);
+//    }
+
     private final ReentrantLock lock = new ReentrantLock();
     private BufferedImage bufferedImage;
     private boolean updThumbnail;
-    private AtomicBoolean updated;
+    private float scale;
+    private final AtomicBoolean updated;
+    private int w, h;
+
 
     public OpenGLImage(BufferedImage bufferedImage) {
         this.bufferedImage = bufferedImage;
         this.glTextureId = -1;
+        this.scale = 1;
         this.updated = new AtomicBoolean(false);
+        this.w = bufferedImage.getWidth();
+        this.h = bufferedImage.getHeight();
     }
 
     public void markUpdate() {
         updated.set(false);
+    }
+
+    public void refreshImageData(@NonNull BufferedImage bufferedImage){
+        lock.lock();
+        this.bufferedImage = bufferedImage;
+        lock.unlock();
     }
 
     public void uploadImage(@NonNull SingleObserver<Boolean> listener) {
@@ -100,17 +107,18 @@ public class OpenGLImage extends Texture {
                                     image = ImageUtils.convert2RGB(image);
                                 }
                             }
-                            if (updThumbnail) {
-                                image = ImageUtils.scale(image, .5f);
+
+                            if (updThumbnail && scale != 1) {
+                                image = ImageUtils.scale(image, scale, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
+                                w = image.getWidth();
+                                h = image.getHeight();
                             }
 
                             if (image.getColorModel().hasAlpha()) {
                                 channel = 4;
                             }
-//                            bufferedImage = image;
                             Raster raster = image.getRaster();
-                            byte[] data = (byte[]) raster.getDataElements(0, 0, image.getWidth(), image.getHeight(), null);
-
+                            byte[] data = ((DataBufferByte) (raster.getDataBuffer())).getData();
                             return ImageUpload.create(data, image.getWidth(), image.getHeight(), channel);
                         }
                     })
@@ -122,23 +130,13 @@ public class OpenGLImage extends Texture {
                         }
                     })
                     .singleOrError()
-                    .doOnSuccess(new Consumer<Boolean>() {
-                        @Override
-                        public void accept(Boolean aBoolean) throws Throwable {
-                            updated.set(aBoolean);
-                        }
-                    })
-                    .doOnError(new Consumer<Throwable>() {
-                        @Override
-                        public void accept(Throwable throwable) throws Throwable {
-                            throwable.printStackTrace();
-                            updated.set(false);
-                        }
-                    })
+                    .doOnSuccess(updated::set)
+                    .doOnError(throwable -> markUpdate())
                     .doOnDispose(new Action() {
                         @Override
                         public void run() throws Throwable {
-                            System.out.println("canceled upload!");
+                            LOGGER.info("Canceled data upload to GPU.");
+                            markUpdate();
                         }
                     })
                     .subscribe(listener);
@@ -148,73 +146,74 @@ public class OpenGLImage extends Texture {
 
     public boolean uploadImageInner(byte[] data, int width, int height, int channel, boolean deleteMemory) {
         RenderSystem.assertThread(RenderSystem::isOnRenderThread);
+//        int mipmapLevel = Minecraft.getInstance().gameSettings.mipmapLevels;
         int mipmapLevel = 1;
+        int tempId;
+        tempId = TextureUtil.generateTextureId();
 
-        if (glTextureId == -1) {
-            glTextureId = TextureUtil.generateTextureId();
-            int error = GL11.glGetError();
-            if (error != GL_NO_ERROR) {
-                return false;
-            }
-        } else {
-            if (updated.get()) {
-                return false;
-            }
-
-            int error = GL11.glGetError();
-            if (error != GL_NO_ERROR || glTextureId == -1) {
-                glTextureId = -1;
-                return false;
-            }
+        int error = GL11.glGetError();
+        if (error != GL_NO_ERROR) {
+            return false;
         }
 
-        if (glTextureId != -1) {
-            lock.lock();
+        if (updated.get()) {
+            return false;
+        }
 
+        if (tempId != -1) {
             ByteBuffer byteBuffer = null;
             try {
                 byteBuffer = MemoryUtil.memAlloc(data.length);
-                byteBuffer.put(data);
-                byteBuffer.flip();
+                byteBuffer.put(data).flip();
 
-                int error = GL11.glGetError();
-                if (error != GL_NO_ERROR) {
-                    lock.unlock();
-                    return false;
-                }
 
                 if (byteBuffer.limit() > 0) {
-                    bindTexture();
+                    GlStateManager.bindTexture(tempId);
                     if (mipmapLevel >= 0) {
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mipmapLevel);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0.0F);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, mipmapLevel);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 0.0F);
+                        GlStateManager.pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
+                        GlStateManager.pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+                    }
+
+                    error = GL11.glGetError();
+                    if (error != GL_NO_ERROR) {
+                        return false;
                     }
 
                     for (int i = 0; i < mipmapLevel; i++) {
                         //Send texel data to OpenGL
                         if (channel == 4) {
-                            GL20.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+//                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, byteBuffer);
                         } else if (channel == 3) {
-                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+//                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
                         }
                     }
-                    GlStateManager.bindTexture(0);
+
+                    error = GL11.glGetError();
+                    if (error != GL_NO_ERROR) {
+                        return false;
+                    }
                 }
-            } catch (OutOfMemoryError error) {
-                return false;
             } finally {
                 MemoryUtil.memFree(byteBuffer);
+                if (glTextureId != -1) {
+                    TextureUtil.releaseTextureId(glTextureId);
+                }
+                glTextureId = tempId;
             }
 
-            lock.unlock();
-            int error = GL11.glGetError();
+            error = GL11.glGetError();
 
             if (error == GL_NO_ERROR) {
                 if (deleteMemory) {
@@ -225,18 +224,16 @@ public class OpenGLImage extends Texture {
                 return false;
             }
         }
+
         return false;
     }
 
-    public void setUseThumbnail(boolean v) {
-        updThumbnail = v;
+    public void setUseThumbnail(boolean v, float scale) {
+        this.updThumbnail = v;
+        this.scale = scale;
     }
 
-    public boolean hasGLSourcePrepared() {
-        return glTextureId > -1 && glIsTexture(glTextureId) && updated.get();
-    }
-
-    public void disposeGLSource() {
+    public synchronized void disposeGLSource() {
         if (glTextureId != -1) {
             deleteGlTexture();
             glTextureId = -1;
@@ -245,19 +242,22 @@ public class OpenGLImage extends Texture {
     }
 
     public void dispose() {
-        disposeGLSource();
-        lock.lock();
-        if (bufferedImage != null) {
-            bufferedImage.flush();
-            bufferedImage = null;
+        if (RenderSystem.isOnRenderThreadOrInit()) {
+            disposeGLSource();
+            if (bufferedImage != null) {
+                bufferedImage.flush();
+                bufferedImage = null;
+            }
+            LOGGER.info("Disposed the image.");
+        } else {
+            RenderSystem.recordRenderCall(this::dispose);
         }
-        lock.unlock();
     }
 
     @Override
     public void close() {
         this.dispose();
-        System.out.println("close");
+        LOGGER.info("Close Image.");
     }
 
     @Override
@@ -281,11 +281,22 @@ public class OpenGLImage extends Texture {
     }
 
     public int getWidth() {
-        return bufferedImage.getWidth();
+        return w;
     }
 
     public int getHeight() {
-        return bufferedImage.getHeight();
+        return h;
     }
 
+    public float getScale() {
+        return scale;
+    }
+
+    public boolean isThumbnail() {
+        return updThumbnail;
+    }
+
+    public boolean hasGLSourcePrepared(){
+        return this.glTextureId != -1;
+    }
 }
