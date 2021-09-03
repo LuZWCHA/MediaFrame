@@ -9,12 +9,16 @@ import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 
 import java.util.PriorityQueue;
 import java.util.Queue;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
 
 public class RenderQueue {
 
     private static final Queue<Runnable> queue = new LinkedBlockingDeque<>();
-    private static int limit = 10;
+    private static final Queue<Runnable> waitQueue = new LinkedBlockingQueue<>();
+    private static int limit = 5;
     private static long exceptWaitTime = 2;
     private static int maxLimit = 20 , minLimit = 1;
 
@@ -41,6 +45,12 @@ public class RenderQueue {
 
     public static void doTasks(){
         long start = System.currentTimeMillis();
+        if(queue.size() < limit){
+            while (!waitQueue.isEmpty() && queue.size() <= limit){
+                queue.add(waitQueue.poll());
+            }
+        }
+
         while (!queue.isEmpty()){
             try {
                 queue.poll().run();
@@ -73,6 +83,7 @@ public class RenderQueue {
     public static void clearQueue(){
         queue.clear();
         distanceQueue.clear();
+        waitQueue.clear();
         posSet.clear();
     }
 
@@ -84,11 +95,20 @@ public class RenderQueue {
         return queue.isEmpty();
     }
 
+
+    /**
+     * @param runnable The task to be add to the render thread.
+     * @return Whether the task will be done at the following render time point.
+     * If the task is not one that should be executed immediately at the following render time, and the task is a heavy one,
+     * the task will be executed at any time after the render time point. In the baddest way, this task may not be done in the
+     * future.
+     */
     public static boolean tryAddTask(Runnable runnable){
         if(queue.size() < limit){
             runTask(runnable);
             return true;
         }
+        waitQueue.add(runnable);
         return false;
     }
 
@@ -123,4 +143,5 @@ public class RenderQueue {
     public static void setMaxRenderObjCount(int maxRenderObjCount) {
         RenderQueue.maxRenderObjCount = maxRenderObjCount;
     }
+
 }

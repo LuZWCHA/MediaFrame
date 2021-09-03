@@ -6,6 +6,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 public class Utils {
     public static String md5(String data) {
@@ -26,5 +27,13 @@ public class Utils {
         } catch (UnsupportedEncodingException e) {
             return Strings.EMPTY;
         }
+    }
+
+    public static String urlToByteString(String url){
+        StringBuilder stringBuilder = new StringBuilder();
+        for (byte c : url.getBytes(StandardCharsets.UTF_8)) {
+            stringBuilder.append(c);
+        }
+        return stringBuilder.toString();
     }
 }

@@ -6,7 +6,6 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.SingleObserver;
 import io.reactivex.rxjava3.functions.Action;
-import io.reactivex.rxjava3.functions.Function;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import net.minecraft.client.renderer.texture.Texture;
 import net.minecraft.client.renderer.texture.TextureUtil;
@@ -18,10 +17,7 @@ import org.lwjgl.system.MemoryUtil;
 import top.nowandfuture.mod.imagesign.schedulers.MyWorldRenderScheduler;
 import top.nowandfuture.mod.imagesign.utils.ImageUtils;
 
-import java.awt.image.AffineTransformOp;
-import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import java.awt.image.Raster;
+import java.awt.image.*;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,6 +25,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static org.lwjgl.opengl.GL11.*;
 
+//The methods in should be called in Render Thread.
 public class OpenGLImage extends Texture {
     private static final Logger LOGGER = LogManager.getLogger(OpenGLImage.class);
 //    private static final  MemoryStack MEMORY_STACK;
@@ -40,6 +37,7 @@ public class OpenGLImage extends Texture {
     private final ReentrantLock lock = new ReentrantLock();
     private BufferedImage bufferedImage;
     private boolean updThumbnail;
+    private BufferedImage thum;
     private float scale;
     private final AtomicBoolean updated;
     private int w, h;
@@ -54,14 +52,19 @@ public class OpenGLImage extends Texture {
         this.h = bufferedImage.getHeight();
     }
 
+    @Deprecated
     public void markUpdate() {
-        updated.set(false);
+        this.updated.set(false);
     }
 
-    public void refreshImageData(@NonNull BufferedImage bufferedImage){
-        lock.lock();
+    public void setImageData(@NonNull BufferedImage bufferedImage){
+        this.lock.lock();
         this.bufferedImage = bufferedImage;
-        lock.unlock();
+        this.lock.unlock();
+    }
+
+    public BufferedImage getImageData(){
+        return this.bufferedImage;
     }
 
     public void uploadImage(@NonNull SingleObserver<Boolean> listener) {
@@ -91,72 +94,58 @@ public class OpenGLImage extends Texture {
     }
 
     public void uploadImage(@NonNull SingleObserver<Boolean> listener, boolean deleteMemory) {
-        updated.set(false);
-        lock.lock();
+        this.lock.lock();
         if (bufferedImage != null) {
             Observable.just(bufferedImage)
                     .observeOn(Schedulers.io())
-                    .map(new Function<BufferedImage, ImageUpload>() {
-                        @Override
-                        public ImageUpload apply(BufferedImage image) throws Throwable {
-                            int channel = 3;
-                            if (image.getType() != BufferedImage.TYPE_3BYTE_BGR || image.getType() != BufferedImage.TYPE_4BYTE_ABGR || image.getType() != BufferedImage.TYPE_CUSTOM) {
-                                if (image.getColorModel().hasAlpha()) {
-                                    image = ImageUtils.convert2RGBA(image);
-                                } else {
-                                    image = ImageUtils.convert2RGB(image);
-                                }
-                            }
-
-                            if (updThumbnail && scale != 1) {
-                                image = ImageUtils.scale(image, scale, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
-                                w = image.getWidth();
-                                h = image.getHeight();
-                            }
-
-                            if (image.getColorModel().hasAlpha()) {
-                                channel = 4;
-                            }
-                            Raster raster = image.getRaster();
-                            byte[] data = ((DataBufferByte) (raster.getDataBuffer())).getData();
-                            return ImageUpload.create(data, image.getWidth(), image.getHeight(), channel);
+                    .map(image -> {
+                        int channel = 3;
+                        if (updThumbnail && scale != 1) {
+                            image = ImageUtils.scale(image, scale, AffineTransformOp.TYPE_NEAREST_NEIGHBOR);
                         }
+
+                        if (image.getType() != BufferedImage.TYPE_3BYTE_BGR || image.getType() != BufferedImage.TYPE_4BYTE_ABGR || image.getType() != BufferedImage.TYPE_CUSTOM) {
+                            if (image.getColorModel().hasAlpha()) {
+                                image = ImageUtils.convert2RGBA(image);
+                            } else {
+                                image = ImageUtils.convert2RGB(image);
+                            }
+                        }
+
+                        if (image.getColorModel().hasAlpha()) {
+                            channel = 4;
+                        }
+                        Raster raster = image.getRaster();
+                        DataBuffer dataBuffer = raster.getDataBuffer();
+                        byte[] data = null;
+                        if(dataBuffer instanceof DataBufferByte){
+                            data = ((DataBufferByte) dataBuffer).getData();
+                        }
+
+                        return ImageUpload.create(data, image.getWidth(), image.getHeight(), channel);
                     })
                     .observeOn(MyWorldRenderScheduler.mainThread())
-                    .map(new Function<ImageUpload, Boolean>() {
-                        @Override
-                        public Boolean apply(ImageUpload image) throws Throwable {
-                            return uploadImageInner(image.data, image.w, image.h, image.channel, deleteMemory);
-                        }
-                    })
+                    .map(image -> uploadImageInner(image.data, image.w, image.h, image.channel, deleteMemory))
                     .singleOrError()
-                    .doOnSuccess(updated::set)
                     .doOnError(throwable -> markUpdate())
-                    .doOnDispose(new Action() {
-                        @Override
-                        public void run() throws Throwable {
-                            LOGGER.info("Canceled data upload to GPU.");
-                            markUpdate();
-                        }
-                    })
+                    .doOnDispose(() -> LOGGER.info("Canceled data upload to GPU."))
                     .subscribe(listener);
         }
-        lock.unlock();
+        this.lock.unlock();
     }
 
     public boolean uploadImageInner(byte[] data, int width, int height, int channel, boolean deleteMemory) {
         RenderSystem.assertThread(RenderSystem::isOnRenderThread);
+        if(data == null) return false;
 //        int mipmapLevel = Minecraft.getInstance().gameSettings.mipmapLevels;
         int mipmapLevel = 1;
-        int tempId;
-        tempId = TextureUtil.generateTextureId();
+        int tempId = glTextureId;
+        if(tempId == -1) {
+            tempId = TextureUtil.generateTextureId();
+        }
 
         int error = GL11.glGetError();
         if (error != GL_NO_ERROR) {
-            return false;
-        }
-
-        if (updated.get()) {
             return false;
         }
 
@@ -166,11 +155,10 @@ public class OpenGLImage extends Texture {
                 byteBuffer = MemoryUtil.memAlloc(data.length);
                 byteBuffer.put(data).flip();
 
-
                 if (byteBuffer.limit() > 0) {
                     GlStateManager.bindTexture(tempId);
                     if (mipmapLevel >= 0) {
-                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -207,14 +195,19 @@ public class OpenGLImage extends Texture {
                 }
             } finally {
                 MemoryUtil.memFree(byteBuffer);
-                if (glTextureId != -1) {
-                    TextureUtil.releaseTextureId(glTextureId);
+                int oldGlTextureId = this.glTextureId;
+                this.glTextureId = tempId;
+                w = width;
+                h = height;
+                updated.set(true);
+
+                if (oldGlTextureId != -1 && oldGlTextureId != this.glTextureId) {
+                    TextureUtil.releaseTextureId(oldGlTextureId);
                 }
-                glTextureId = tempId;
+
             }
 
             error = GL11.glGetError();
-
             if (error == GL_NO_ERROR) {
                 if (deleteMemory) {
                     // TODO: 2021/8/20 remove the bufferedImage
@@ -297,6 +290,6 @@ public class OpenGLImage extends Texture {
     }
 
     public boolean hasGLSourcePrepared(){
-        return this.glTextureId != -1;
+        return this.glTextureId != -1 && updated.get();
     }
 }

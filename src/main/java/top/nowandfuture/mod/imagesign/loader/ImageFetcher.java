@@ -4,10 +4,10 @@ import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.ObservableOnSubscribe;
+import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.core.Scheduler;
-import io.reactivex.rxjava3.functions.Consumer;
+import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.vector.Vector3d;
@@ -92,6 +92,7 @@ public enum ImageFetcher {
 
     }
 
+    @Deprecated
     public void reload() {
         LOGGER.info("Reload GLSources: {} images to reload.", cache.size());
         cache.markUpdate();
@@ -110,6 +111,18 @@ public enum ImageFetcher {
         }
 
         blackUrls.remove(url);
+    }
+
+    public void reloadImageSmooth(String url, BlockPos blockPos) {
+        if (cache.contain(url)) {
+            try {
+                deleteTempFile(url);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            ImageLoadTask loadTask = new ImageLoadTask.SignImageLoadTask(blockPos, url);
+            ImageLoadManager.INSTANCE.addToLoad(loadTask);
+        }
     }
 
     public @NonNull Observable<ImageEntity> get(String url, BlockPos blockPos, Scheduler curSch) {
@@ -131,14 +144,14 @@ public enum ImageFetcher {
         return Observable.create(e -> {
             final ImageEntity queryEntity = getCache().findByPos(pos);
             //If the url changed, remove the position.
-            if(!url.equals(queryEntity.url)){
-                getCache().removeEntity(queryEntity.url, pos);
+            if (queryEntity != ImageEntity.EMPTY && !url.equals(queryEntity.url)) {
+                getCache().removeEntity(queryEntity.url, pos.toLong());
             }
 
             //If find the url, try to merge the position.
             if (getCache().contain(url)) {
                 final ImageEntity entity = getCache().get(url);
-                entity.merge(url, pos);
+                entity.merge(url, pos.toLong());
                 e.onNext(entity);
             }
 
@@ -153,7 +166,7 @@ public enum ImageFetcher {
             LOGGER.info("Loading image: {}", url);
             final ImageLoader.ImageData data = loadFromDisk(diskPath);
             if (data != null) {
-                final ImageEntity entity = ImageEntity.create(url, blockPos, data);
+                final ImageEntity entity = ImageEntity.create(url, blockPos.toLong(), data);
                 LOGGER.info("Image loaded: {}", url);
 
                 entity.setImageInfo(data.getImageInfo());
@@ -166,7 +179,7 @@ public enum ImageFetcher {
                             String.format("Image is too big, the image max size limit is: %d, but the image size is %d.",
                                     sizeLimit, imageSize)
                     ));
-                }else {
+                } else {
                     final ImageEntity added = cache.add(entity);
                     if (added.equals(ImageEntity.EMPTY)) {
                         e.tryOnError(
@@ -198,7 +211,7 @@ public enum ImageFetcher {
                 LOGGER.info("Loading image: {}", url);
                 ImageLoader.ImageData data = loadFromDisk(diskPath);
                 if (data != null) {
-                    final ImageEntity entity = ImageEntity.create(url, blockPos, data);
+                    final ImageEntity entity = ImageEntity.create(url, blockPos.toLong(), data);
                     entity.setImageInfo(data.getImageInfo());
                     LOGGER.info("Caching image: {}", url);
                     long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
@@ -208,7 +221,7 @@ public enum ImageFetcher {
                                 String.format("Image is too big, the image max size limit is: %d, but the image size is %d.",
                                         sizeLimit, imageSize)
                         ));
-                    }else {
+                    } else {
                         final ImageEntity added = cache.add(entity);
                         if (added.equals(ImageEntity.EMPTY)) {
                             e.tryOnError(new OutOfMemoryError("out of memory of Cache: cache left memory is " +
@@ -275,15 +288,15 @@ public enum ImageFetcher {
         }
     }
 
-    public void reRender(BlockPos pos) {
+    public void refreshSmooth(BlockPos pos) {
         ImageEntity entity = cache.findByPos(pos);
         if (entity != null && entity != ImageEntity.EMPTY) {
-            entity.markUpdate();
+            reloadImageSmooth(entity.url, pos);
         }
     }
 
     public void removeByPos(BlockPos pos) {
-        cache.removeEntityByPos(pos);
+        cache.removeEntityByPos(pos.toLong());
     }
 
     public boolean isInBlackList(String url) {

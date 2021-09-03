@@ -1,6 +1,7 @@
 package top.nowandfuture.mod.imagesign.loader;
 
 import jdk.nashorn.internal.ir.debug.ObjectSizeCalculator;
+import top.nowandfuture.mod.imagesign.caches.IParam;
 
 import javax.annotation.Nullable;
 import java.awt.image.BufferedImage;
@@ -58,13 +59,13 @@ public interface ImageLoader {
             return imageInfo;
         }
 
-        public ImageData(String format, @Nullable Object pram, BufferedImage... images){
+        public ImageData(String format, @Nullable IParam obj, BufferedImage... images){
             this.images = images;
-            this.imageInfo = new ImageInfo(format, checkMemory(images), pram);
+            this.imageInfo = new ImageInfo(format, checkMemory(images), obj);
         }
 
-        public ImageData(String format, @Nullable Object pram, List<BufferedImage> images){
-            this(format, pram, (BufferedImage[]) images.toArray());
+        public ImageData(String format, @Nullable IParam obj, List<BufferedImage> images){
+            this(format, obj, images.toArray(new BufferedImage[0]));
         }
 
         private long checkMemory(Object obj){

@@ -2,6 +2,7 @@ package top.nowandfuture.mod.imagesign.caches;
 
 import io.netty.util.collection.LongObjectHashMap;
 import io.netty.util.collection.LongObjectMap;
+import it.unimi.dsi.fastutil.longs.LongList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.vector.Vector3d;
 import org.jetbrains.annotations.NotNull;
@@ -10,7 +11,6 @@ import java.lang.ref.SoftReference;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiConsumer;
 
 public class ImageEntityCache {
     private Vector3d viewerPos;
@@ -25,9 +25,9 @@ public class ImageEntityCache {
     private CacheChangeListener cacheChangeListener;
 
     public interface CacheChangeListener {
-        void remove(ImageEntity imageEntity, BlockPos... positions);
+        void remove(ImageEntity imageEntity, long... positions);
 
-        void add(ImageEntity imageEntity, BlockPos... positions);
+        void add(ImageEntity imageEntity, long... positions);
     }
 
     //reserve 10 MB memory
@@ -84,8 +84,9 @@ public class ImageEntityCache {
 
         synchronized (this) {
             cacheMap.forEach((s, imageEntity) -> {
-                for (BlockPos po : imageEntity.posList) {
-                    ImageWithDistance imageWithDistance = ImageWithDistance.create(imageEntity, po, po.distanceSq(bb));
+                for (long po : imageEntity.posList) {
+                    BlockPos blockPos = BlockPos.fromLong(po);
+                    ImageWithDistance imageWithDistance = ImageWithDistance.create(imageEntity, blockPos, blockPos.distanceSq(bb));
                     sortList.add(imageWithDistance);
                 }
             });
@@ -144,23 +145,22 @@ public class ImageEntityCache {
         } else {
             ImageEntity res = ImageEntity.EMPTY;
             for (Map.Entry<String, ImageEntity> entry : cacheMap.entrySet()) {
-                if (entry.getValue().posList.contains(pos)) {
+                if (entry.getValue().posList.contains(posLong)) {
                     res = entry.getValue();
                     break;
                 }
             }
             if (res != ImageEntity.EMPTY) {
-                posQuickMap.put(pos.toLong(), res);
+                posQuickMap.put(posLong, res);
             }
             return res;
         }
     }
 
-    public synchronized ImageEntity removeEntityByPos(BlockPos pos) {
-        final long posLong = pos.toLong();
-        if (posQuickMap.containsKey(posLong)) {
-            ImageEntity entity = posQuickMap.get(posLong);
-            removeEntity(entity.url, pos);
+    public synchronized ImageEntity removeEntityByPos(long pos) {
+        if (posQuickMap.containsKey(pos)) {
+            ImageEntity entity = posQuickMap.get(pos);
+            return removeEntity(entity.url, pos);
         } else {
             ImageEntity res = ImageEntity.EMPTY;
             for (Map.Entry<String, ImageEntity> entry : cacheMap.entrySet()) {
@@ -178,11 +178,11 @@ public class ImageEntityCache {
         return null;
     }
 
-    public synchronized ImageEntity removeEntity(String url, BlockPos pos) {
+    public synchronized ImageEntity removeEntity(String url, long pos) {
         final ImageEntity imageEntity = cacheMap.get(url);
         if (imageEntity != null) {
-            posQuickMap.remove(pos.toLong());
-            imageEntity.posList.remove(pos);
+            posQuickMap.remove(pos);
+            imageEntity.posList.rem(pos);
             removeEvent(imageEntity, pos);
             if (imageEntity.posList.isEmpty()) {
                 removeImage(url);
@@ -199,14 +199,16 @@ public class ImageEntityCache {
             curMemory -= imageEntity.imageInfo.getSize();
             //The posList may be empty
             if (!imageEntity.posList.isEmpty()) {
-                removeEvent(imageEntity, imageEntity.posList.toArray(new BlockPos[0]));
+                removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
+            }else{
+                removeEvent(imageEntity);
             }
             imageEntity.dispose();
         }
         return imageEntity;
     }
 
-    private void removeEvent(ImageEntity imageEntity, BlockPos... positions) {
+    private void removeEvent(ImageEntity imageEntity, long... positions) {
         if (cacheChangeListener != null) {
             cacheChangeListener.remove(imageEntity, positions);
         }
@@ -224,7 +226,7 @@ public class ImageEntityCache {
 
     public synchronized void markUpdate() {
         for (Map.Entry<String, ImageEntity> stringImageEntityEntry : cacheMap.entrySet()) {
-            stringImageEntityEntry.getValue().markUpdate();
+            stringImageEntityEntry.getValue().markUpdated();
         }
     }
 
@@ -232,9 +234,9 @@ public class ImageEntityCache {
         return cacheMap.size();
     }
 
-    private void removeAllPosFromQuickQueryMap(List<BlockPos> posList) {
-        for (BlockPos blockPos : posList) {
-            posQuickMap.remove(blockPos.toLong());
+    private void removeAllPosFromQuickQueryMap(LongList posList) {
+        for (long blockPos : posList) {
+            posQuickMap.remove(blockPos);
         }
     }
 
@@ -247,23 +249,25 @@ public class ImageEntityCache {
 
         //Merge the position:
         if (cacheMap.containsKey(entity.url)) {
-            final ImageEntity imageEntity = cacheMap.get(entity.url);
-            boolean hasAdded = imageEntity.posList.contains(entity.getFirstPos());
+            final ImageEntity cachedImage = cacheMap.get(entity.url);
+            boolean hasAdded = cachedImage.posList.contains(entity.getFirstID());
             if (!hasAdded) {
-                imageEntity.posList.add(entity.getFirstPos());
-                posQuickMap.put(entity.getFirstPos().toLong(), imageEntity);
+                cachedImage.posList.add(entity.getFirstID());
+                posQuickMap.put(entity.getFirstID(), cachedImage);
             }
 
-            return imageEntity;
+            cachedImage.refreshImagesData(entity);
+
+            return cachedImage;
         }
 
         if (curMemory + imageSize <= memoryLimit) {
             curMemory += imageSize;
             final boolean removeEldest = cacheMap.size() == size;
             cacheMap.put(entity.url, entity);
-            posQuickMap.put(entity.getFirstPos().toLong(), entity);
+            posQuickMap.put(entity.getFirstID(), entity);
 
-            addEvent(entity, entity.posList.toArray(new BlockPos[0]));
+            addEvent(entity, entity.posList.toArray(new long[0]));
 
             //Dispose the eldest that be removed by map itself.
             if (removeEldest) {
@@ -273,7 +277,7 @@ public class ImageEntityCache {
                     //remove the eldest image if out of the capacity
                     removeAllPosFromQuickQueryMap(entity.posList);
 
-                    removeEvent(imageEntity, imageEntity.posList.toArray(new BlockPos[0]));
+                    removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
                     entry.getValue().dispose();
                 }
             }
@@ -295,7 +299,7 @@ public class ImageEntityCache {
 
     private void delayAdd(ImageEntity imageEntity) {
         synchronized (waitAddList) {
-            BlockPos blockPos = imageEntity.getFirstPos();
+            BlockPos blockPos = BlockPos.fromLong(imageEntity.getFirstID());
             double distance = blockPos.distanceSq(new BlockPos(viewerPos));
             waitAddList.add(new SoftReference<>(ImageWithDistance.create(imageEntity, blockPos, distance)));
         }
@@ -319,7 +323,8 @@ public class ImageEntityCache {
 
             for (ImageEntity entity : cacheMap.values()) {
                 if (entity != null) {
-                    for (BlockPos blockPos : entity.posList) {
+                    for (long l : entity.posList) {
+                        BlockPos blockPos = BlockPos.fromLong(l);
                         imageWithDistanceList.add(ImageWithDistance.create(entity, blockPos, blockPos.distanceSq(viewer)));
                     }
                 }
@@ -371,7 +376,7 @@ public class ImageEntityCache {
 
     }
 
-    private void addEvent(ImageEntity entity, BlockPos... positions) {
+    private void addEvent(ImageEntity entity, long... positions) {
         if (cacheChangeListener != null) {
             cacheChangeListener.add(entity, positions);
         }
@@ -380,7 +385,7 @@ public class ImageEntityCache {
     public synchronized void dispose() {
         cacheMap.forEach((s, imageEntity) -> {
             imageEntity.dispose();
-            removeEvent(imageEntity, imageEntity.posList.toArray(new BlockPos[0]));
+            removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
         });
         posQuickMap.clear();
         cacheMap.clear();

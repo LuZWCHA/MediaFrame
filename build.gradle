@@ -19,7 +19,7 @@ apply plugin: 'maven-publish'
 apply plugin: 'org.spongepowered.mixin'
 
 
-version = '0.01'
+version = '0.03'
 group = 'top.nowandfuture.imagesign'
 
 archivesBaseName = "imagesign-${project.mcversion}"

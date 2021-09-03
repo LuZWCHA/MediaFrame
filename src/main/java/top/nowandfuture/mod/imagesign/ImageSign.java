@@ -24,6 +24,7 @@ import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.setup.ClientProxy;
 import top.nowandfuture.mod.imagesign.setup.CommonProxy;
 import top.nowandfuture.mod.imagesign.setup.IProxy;
+import top.nowandfuture.mod.imagesign.utils.Utils;
 
 @Mod("imagesign")
 public class ImageSign {
@@ -42,7 +43,7 @@ public class ImageSign {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::doClientStuff);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onLoad);
-        RenderQueue.init(50, 2);
+        RenderQueue.init(5, 2);
         proxy = DistExecutor.safeRunForDist(() -> ClientProxy::new, () -> CommonProxy::new);
         INSTANCE = this;
     }
@@ -83,23 +84,24 @@ public class ImageSign {
 
         ImageFetcher.INSTANCE.setCacheListener(new ImageEntityCache.CacheChangeListener() {
             @Override
-            public void remove(ImageEntity imageEntity, BlockPos... positions) {
-                RenderSystem.recordRenderCall(new IRenderCall() {
-                    @Override
-                    public void execute() {
-                        for (BlockPos position : positions) {
+            public void remove(ImageEntity imageEntity, long... positions) {
+                RenderSystem.recordRenderCall(() -> {
+                    if(positions == null || positions.length == 0){
+                        for (int i = 0; i < imageEntity.getOrgImages().size(); i++) {
                             ResourceLocation location = new ResourceLocation(
-                                    String.valueOf(position.toLong())
+                                    Utils.urlToByteString(imageEntity.url),
+                                    String.valueOf(i)
                             );
                             Minecraft.getInstance().getTextureManager().deleteTexture(location);
                         }
+
                     }
                 });
 
             }
 
             @Override
-            public void add(ImageEntity imageEntity, BlockPos... positions) {
+            public void add(ImageEntity imageEntity, long... positions) {
 
             }
         });

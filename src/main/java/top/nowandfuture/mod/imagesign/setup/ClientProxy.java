@@ -25,6 +25,7 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import top.nowandfuture.mod.imagesign.ImageSign;
 import top.nowandfuture.mod.imagesign.RenderQueue;
+import top.nowandfuture.mod.imagesign.caches.GIFImagePlayManager;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
@@ -65,6 +66,7 @@ public class ClientProxy extends CommonProxy {
             Entity entity = Minecraft.getInstance().getRenderViewEntity();
             if (entity != null) {
                 ImageFetcher.INSTANCE.onTick(entity.getPositionVec());
+                GIFImagePlayManager.INSTANCE.tick();
                 if (OptiFineHelper.isLoaded()) {
                     boolean cur = OptiFineHelper.isShaderLoaded();
                     if (cur != lastShader) {
@@ -79,8 +81,8 @@ public class ClientProxy extends CommonProxy {
                         RenderSystem.recordRenderCall(new IRenderCall() {
                             @Override
                             public void execute() {
-                                ImageLoadManager.INSTANCE.clear(entity.world);
-                                ImageFetcher.INSTANCE.reload();
+//                                ImageLoadManager.INSTANCE.clear(entity.world);
+//                                ImageFetcher.INSTANCE.reload();
                             }
                         });
 
@@ -123,7 +125,7 @@ public class ClientProxy extends CommonProxy {
                     }
                 } else {
                     if (refresh)
-                        ImageFetcher.INSTANCE.reRender(blockPos);
+                        ImageFetcher.INSTANCE.refreshSmooth(blockPos);
                     else {
                         ImageLoadManager.INSTANCE.clear(world);
                         ImageFetcher.INSTANCE.refresh(blockPos);
@@ -140,6 +142,7 @@ public class ClientProxy extends CommonProxy {
             ImageLoadManager.INSTANCE.clear(event.getWorld());
             ImageFetcher.INSTANCE.dispose();
             RenderQueue.clearQueue();
+            GIFImagePlayManager.INSTANCE.clear();
         }
     }
 

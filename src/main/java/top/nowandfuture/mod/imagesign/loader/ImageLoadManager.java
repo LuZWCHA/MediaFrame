@@ -79,7 +79,6 @@ public enum ImageLoadManager {
             ImageLoadTask loadTask = toLoadQueue.poll();
             BlockPos blockPos = loadTask.getPos();
             posRecord.remove(blockPos.toLong());
-            double distanceSq = loadTask.getPos().distanceSq(loadTask.getViewerPos().get());
             if(!isLoading(blockPos.toLong())
                     && loadingMap.size() < MAX_LOAD_COUNT) {
                 loadTask.run();

@@ -200,7 +200,7 @@ public class RenderHelper {
     }
 
     public static void innerBlit2(MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int light, ResourceLocation id) {
-        innerBlit2(stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, -1, light, id);
+        innerBlit2(stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, 1, light, id);
     }
 
     public static void innerBlit2(MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {
@@ -208,10 +208,47 @@ public class RenderHelper {
         innerBlit2(entry.getMatrix(), entry.getNormal(), x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, nx, ny, nz, light, id);
     }
 
+    public static void blit3(IVertexBuilder builder, MatrixStack matrixStack, int x, int y, int blitOffset, float uOffset, float vOffset, int uWidth, int vHeight, int textureHeight, int textureWidth, ResourceLocation id) {
+        innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, uWidth, vHeight, uOffset, vOffset, textureWidth, textureHeight, id);
+    }
+
+    public static void blit3(IVertexBuilder builder, MatrixStack matrixStack, int x, int y, int blitOffset, float uOffset, float vOffset, int uWidth, int vHeight, int textureHeight, int textureWidth, int light, ResourceLocation id) {
+        innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, uWidth, vHeight, uOffset, vOffset, textureWidth, textureHeight, light, id);
+    }
+
+    private static void innerBlit3(IVertexBuilder builder, MatrixStack matrixStack, int x1, int x2, int y1, int y2, int blitOffset, int uWidth, int vHeight, float uOffset, float vOffset, int textureWidth, int textureHeight, int light, ResourceLocation id) {
+        innerBlit3(builder, matrixStack, x1, x2, y1, y2, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, light, id);
+    }
+
+    private static void innerBlit3(IVertexBuilder builder, MatrixStack matrixStack, int x1, int x2, int y1, int y2, int blitOffset, int uWidth, int vHeight, float uOffset, float vOffset, int textureWidth, int textureHeight, ResourceLocation id) {
+        innerBlit3(builder, matrixStack, x1, x2, y1, y2, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, id);
+    }
+
+    public static void innerBlit3(IVertexBuilder builder, MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, ResourceLocation id) {
+        innerBlit3(builder, stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, RenderHelper.light, id);
+    }
+
+    public static void innerBlit3(IVertexBuilder builder, MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int light, ResourceLocation id) {
+        innerBlit3(builder, stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, 1, light, id);
+    }
+
+    public static void innerBlit3(IVertexBuilder builder, MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {
+        MatrixStack.Entry entry = stack.getLast();
+        innerBlit3(builder, entry.getMatrix(), entry.getNormal(), x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, nx, ny, nz, light, id);
+    }
+
     private static void innerBlit2(Matrix4f matrix, Matrix3f normalMatrix, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {
 
         IRenderTypeBuffer.Impl renderTypeBuffer = Minecraft.getInstance().getRenderTypeBuffers().getBufferSource();
         IVertexBuilder builder = renderTypeBuffer.getBuffer(RenderType.getEntitySolid(id));
+
+        builder.pos(matrix, (float) x1, (float) y2, (float) blitOffset).color(255, 255, 255, 255).tex(minU, maxV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
+        builder.pos(matrix, (float) x2, (float) y2, (float) blitOffset).color(255, 255, 255, 255).tex(maxU, maxV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
+        builder.pos(matrix, (float) x2, (float) y1, (float) blitOffset).color(255, 255, 255, 255).tex(maxU, minV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
+        builder.pos(matrix, (float) x1, (float) y1, (float) blitOffset).color(255, 255, 255, 255).tex(minU, minV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
+    }
+
+    private static void innerBlit3(IVertexBuilder builder, Matrix4f matrix, Matrix3f normalMatrix, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light, ResourceLocation id) {
 
         builder.pos(matrix, (float) x1, (float) y2, (float) blitOffset).color(255, 255, 255, 255).tex(minU, maxV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
         builder.pos(matrix, (float) x2, (float) y2, (float) blitOffset).color(255, 255, 255, 255).tex(maxU, maxV).overlay(OverlayTexture.NO_OVERLAY).lightmap(light).normal(normalMatrix, (float)nx, (float)ny, (float)nz).endVertex();
