@@ -25,7 +25,7 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
         super.remove();
         if(world != null && world.isRemote()){
             ImageLoadManager.INSTANCE.tryRemoveFromLoadingList(pos.toLong());
-            ImageFetcher.INSTANCE.removeByPos(pos);
+            ImageFetcher.INSTANCE.removeByPos(pos.toLong());
         }
     }
 
@@ -41,7 +41,7 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
         super.onChunkUnloaded();
         if(world != null && world.isRemote()){
             ImageLoadManager.INSTANCE.tryRemoveFromLoadingList(pos.toLong());
-            ImageFetcher.INSTANCE.removeByPos(pos);
+            ImageFetcher.INSTANCE.removeByPos(pos.toLong());
         }
     }
 

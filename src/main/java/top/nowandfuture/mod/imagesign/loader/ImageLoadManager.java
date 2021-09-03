@@ -1,46 +1,59 @@
 package top.nowandfuture.mod.imagesign.loader;
 
+import com.ibm.icu.impl.Pair;
+import io.netty.util.internal.ConcurrentSet;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.Disposable;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IWorld;
-import top.nowandfuture.mod.imagesign.RenderQueue;
 
+import java.util.HashSet;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.BiConsumer;
 
 //Thread Save
 public enum ImageLoadManager {
-    INSTANCE;
-    private final ConcurrentHashMap<Long, Disposable> loadingMap;
+    INSTANCE();
+    private final ConcurrentHashMap<Long, Pair<Disposable, String>> loadingMap;
+    private final ConcurrentSet<String> loadingUrlsSet;
+
     private final PriorityQueue<ImageLoadTask> toLoadQueue;
     private final LongSet posRecord;
+    private final Set<String> urlRecord;
 
     ImageLoadManager(){
-        loadingMap = new ConcurrentHashMap<>();
-        toLoadQueue = new PriorityQueue<>();
-        posRecord = new LongArraySet();
+        this.urlRecord = new HashSet<>();
+        this.loadingMap = new ConcurrentHashMap<>();
+        this.loadingUrlsSet = new ConcurrentSet<>();
+        this.toLoadQueue = new PriorityQueue<>();
+        this.posRecord = new LongArraySet();
     }
 
-    public boolean isLoading(Long entityPos){
-        return loadingMap.containsKey(entityPos);
+    public boolean isLoading(String url){
+        return loadingUrlsSet.contains(url);
     }
 
-    public void addToLoadingList(Long entityPos, Disposable disposable){
-        if(!isLoading(entityPos)) {
-            loadingMap.put(entityPos, disposable);
+    public boolean isLoading(long pos){
+        return loadingMap.containsKey(pos);
+    }
+
+    public void addToLoadingList(Long entityPos, String url, Disposable disposable){
+        if(!isLoading(url)) {
+            loadingMap.put(entityPos, Pair.of(disposable, url));
+            loadingUrlsSet.add(url);
         }
     }
 
     public void removeFromLoadingList(Long entityPos){
-        Disposable disposable = loadingMap.remove(entityPos);
-        if(disposable != null){
-            disposable.dispose();
+        Pair<Disposable, String> pair = loadingMap.remove(entityPos);
+        if(pair != null){
+            pair.first.dispose();
+            loadingUrlsSet.remove(pair.second);
         }
+
     }
 
     public boolean tryRemoveFromLoadingList(Long entityPos){
@@ -53,23 +66,26 @@ public enum ImageLoadManager {
 
     public void clear(IWorld world) {
         synchronized (this) {
-            loadingMap.forEach((entityPos, disposable) -> {
+            loadingMap.forEach((entityPos, pair) -> {
                 if (world != null && world.getTileEntity(BlockPos.fromLong(entityPos)) != null) {
-                    disposable.dispose();
+                    pair.first.dispose();
                 }
             });
 
             loadingMap.clear();
             posRecord.clear();
             toLoadQueue.clear();
+            urlRecord.clear();
         }
     }
 
     public synchronized void addToLoad(@NonNull ImageLoadTask task){
-        long pos = task.getPos().toLong();
-        if(!posRecord.contains(pos) && !isLoading(pos)) {
+        long pos = task.getPos();
+        String url = task.getUrl();
+        if(!posRecord.contains(pos) && !isLoading(url)) {
             toLoadQueue.add(task);
             posRecord.add(pos);
+            urlRecord.add(url);
         }
     }
 
@@ -77,9 +93,10 @@ public enum ImageLoadManager {
     public synchronized void runLoadTasks(){
         while (!toLoadQueue.isEmpty()){
             ImageLoadTask loadTask = toLoadQueue.poll();
-            BlockPos blockPos = loadTask.getPos();
+            BlockPos blockPos = BlockPos.fromLong(loadTask.getPos());
             posRecord.remove(blockPos.toLong());
-            if(!isLoading(blockPos.toLong())
+            urlRecord.remove(loadTask.getUrl());
+            if(!isLoading(loadTask.getUrl())
                     && loadingMap.size() < MAX_LOAD_COUNT) {
                 loadTask.run();
             }

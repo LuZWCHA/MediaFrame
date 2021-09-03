@@ -132,7 +132,7 @@ public abstract class MixinSignTileEntityRenderer {
         RenderHelper.blit3(builder, matrixStackIn,
                 0, 0, 0, 0, 0f,
                 w, h, h, w,
-                combinedLightIn, location);
+                combinedLightIn);
 
         matrixStackIn.pop();
     }
@@ -169,7 +169,7 @@ public abstract class MixinSignTileEntityRenderer {
                 return;
             }
 
-            ImageEntity imageEntity = fetcher.grabImage(url, tileEntityIn.getPos());
+            ImageEntity imageEntity = fetcher.grabImage(url, tileEntityIn.getPos().toLong());
             if (imageEntity != null && !ImageEntity.EMPTY.equals(imageEntity)) {
 
                 if (imageEntity.getOrgImages().isEmpty())
@@ -257,7 +257,7 @@ public abstract class MixinSignTileEntityRenderer {
                 }
             } else {
                 ImageLoadManager.INSTANCE.addToLoad(
-                        new ImageLoadTask.SignImageLoadTask(tileEntityIn.getPos(), url)
+                        new ImageLoadTask.SignImageLoadTask(tileEntityIn.getPos().toLong(), url)
                 );
             }
 

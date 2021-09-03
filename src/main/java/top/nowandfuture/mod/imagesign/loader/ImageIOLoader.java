@@ -37,6 +37,7 @@ public class ImageIOLoader implements ImageLoader {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         client = builder
                 .connectTimeout(500, TimeUnit.MILLISECONDS)
+                .callTimeout(500, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
                         new TrustAll.trustManager())
                 .proxy(ProxyManager.INSTANCE.getProxy().getProxyIns())

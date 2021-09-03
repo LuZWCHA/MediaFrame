@@ -28,6 +28,7 @@ import top.nowandfuture.mod.imagesign.RenderQueue;
 import top.nowandfuture.mod.imagesign.caches.GIFImagePlayManager;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
+import top.nowandfuture.mod.imagesign.loader.Vector3d;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
 
 @OnlyIn(Dist.CLIENT)
@@ -65,7 +66,7 @@ public class ClientProxy extends CommonProxy {
         if (event.phase == TickEvent.Phase.START) {
             Entity entity = Minecraft.getInstance().getRenderViewEntity();
             if (entity != null) {
-                ImageFetcher.INSTANCE.onTick(entity.getPositionVec());
+                ImageFetcher.INSTANCE.onTick(new Vector3d(entity.getPosX(), entity.getPosY(), entity.getPosZ()));
                 GIFImagePlayManager.INSTANCE.tick();
                 if (OptiFineHelper.isLoaded()) {
                     boolean cur = OptiFineHelper.isShaderLoaded();
@@ -125,10 +126,10 @@ public class ClientProxy extends CommonProxy {
                     }
                 } else {
                     if (refresh)
-                        ImageFetcher.INSTANCE.refreshSmooth(blockPos);
+                        ImageFetcher.INSTANCE.refreshSmooth(blockPos.toLong());
                     else {
                         ImageLoadManager.INSTANCE.clear(world);
-                        ImageFetcher.INSTANCE.refresh(blockPos);
+                        ImageFetcher.INSTANCE.refresh(blockPos.toLong());
                     }
                 }
             }

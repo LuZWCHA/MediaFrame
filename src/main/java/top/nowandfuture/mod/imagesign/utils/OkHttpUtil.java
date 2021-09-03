@@ -19,11 +19,14 @@ public class OkHttpUtil {
         try (Response response = call.execute();
              InputStream is = Objects.requireNonNull(response.body()).byteStream();
              FileOutputStream fileOutputStream = new FileOutputStream(file)){
-
-            byte[] bytes = new byte[2048];
-            int count;
-            while ((count = is.read(bytes)) != -1){
-                fileOutputStream.write(bytes, 0, count);
+            if(response.isSuccessful()) {
+                byte[] bytes = new byte[2048];
+                int count;
+                while ((count = is.read(bytes)) != -1) {
+                    fileOutputStream.write(bytes, 0, count);
+                }
+            }else{
+                return false;
             }
         }catch (Exception e){
             return false;

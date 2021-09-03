@@ -18,13 +18,13 @@ public abstract class ImageLoadTask implements Runnable, Comparable<ImageLoadTas
     protected void load(){
         ImageLoadManager loadManager = ImageLoadManager.INSTANCE;
         ImageFetcher fetcher = ImageFetcher.INSTANCE;
-        long posLong = getPos().toLong();
+        long posLong = getPos();
         String url = getUrl();
-        if (!loadManager.isLoading(posLong)) {
+        if (!loadManager.isLoading(url)) {
             //noinspection ResultOfMethodCallIgnored
             fetcher.get(url, getPos(), OpenGLScheduler.renderThread())
                     .doOnSubscribe(disposable1 -> {
-                        loadManager.addToLoadingList(posLong, disposable1);
+                        loadManager.addToLoadingList(posLong, url, disposable1);
                     })
                     .subscribe(
                             imageEntity1 -> {
@@ -45,43 +45,45 @@ public abstract class ImageLoadTask implements Runnable, Comparable<ImageLoadTas
         }
     }
 
-    @Override
-    public int compareTo(@NotNull ImageLoadTask o) {
-        double otherDis = o.getPos().distanceSq(getViewerPos().get());
-        double distanceSq = getPos().distanceSq(getViewerPos().get());
-        double res = distanceSq - otherDis;
-        if (res > 0) return 1;
-        else if (res < 0) return -1;
-        return 0;
-    }
+
 
     @Override
     public int hashCode() {
-        return getPos().hashCode();
+        return getUrl().hashCode();
     }
 
     @Override
     public boolean equals(Object obj) {
-        return getPos().equals(obj);
+        return getUrl().equals(obj);
     }
 
-    public abstract BlockPos getPos();
+    public abstract long getPos();
 
     public abstract String getUrl();
 
     public abstract Supplier<BlockPos> getViewerPos();
 
     public static class SignImageLoadTask extends ImageLoadTask{
-        private final BlockPos pos;
+        private final long pos;
         private final String url;
 
-        public SignImageLoadTask(BlockPos pos, String url) {
+        public SignImageLoadTask(long pos, String url) {
             this.pos = pos;
             this.url = url;
         }
 
         @Override
-        public BlockPos getPos() {
+        public int compareTo(@NotNull ImageLoadTask o) {
+            double otherDis = BlockPos.fromLong(o.getPos()).distanceSq(getViewerPos().get());
+            double distanceSq = BlockPos.fromLong(getPos()).distanceSq(getViewerPos().get());
+            double res = distanceSq - otherDis;
+            if (res > 0) return 1;
+            else if (res < 0) return -1;
+            return 0;
+        }
+
+        @Override
+        public long getPos() {
             return pos;
         }
 

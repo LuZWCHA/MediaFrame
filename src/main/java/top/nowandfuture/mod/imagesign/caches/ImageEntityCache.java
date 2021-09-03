@@ -3,17 +3,19 @@ package top.nowandfuture.mod.imagesign.caches;
 import io.netty.util.collection.LongObjectHashMap;
 import io.netty.util.collection.LongObjectMap;
 import it.unimi.dsi.fastutil.longs.LongList;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.vector.Vector3d;
 import org.jetbrains.annotations.NotNull;
+import top.nowandfuture.mod.imagesign.loader.Vector3d;
 
 import java.lang.ref.SoftReference;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import net.minecraft.util.math.BlockPos;
+
+
 public class ImageEntityCache {
-    private Vector3d viewerPos;
+    private top.nowandfuture.mod.imagesign.loader.Vector3d viewerPos;
 
     private long memoryLimit;
     private int size;
@@ -68,7 +70,7 @@ public class ImageEntityCache {
 
     private AtomicBoolean posDirty = new AtomicBoolean(true);
 
-    public void updateViewerPos(@NotNull Vector3d pos) {
+    public void updateViewerPos(@NotNull top.nowandfuture.mod.imagesign.loader.Vector3d pos) {
         if (!pos.equals(this.viewerPos)) {
             this.viewerPos = pos;
             this.posDirty.set(true);
@@ -80,7 +82,7 @@ public class ImageEntityCache {
     @Deprecated
     public double removeFarthestEntities(long memorySize, double addedDistance, int a) {
         LinkedList<ImageWithDistance> sortList = new LinkedList<>();
-        BlockPos bb = new BlockPos(viewerPos);
+        BlockPos bb = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
 
         synchronized (this) {
             cacheMap.forEach((s, imageEntity) -> {
@@ -138,20 +140,19 @@ public class ImageEntityCache {
         return distance;
     }
 
-    public synchronized ImageEntity findByPos(BlockPos pos) {
-        final long posLong = pos.toLong();
-        if (posQuickMap.containsKey(posLong)) {
-            return posQuickMap.get(posLong);
+    public synchronized ImageEntity findByPos(long pos) {
+        if (posQuickMap.containsKey(pos)) {
+            return posQuickMap.get(pos);
         } else {
             ImageEntity res = ImageEntity.EMPTY;
             for (Map.Entry<String, ImageEntity> entry : cacheMap.entrySet()) {
-                if (entry.getValue().posList.contains(posLong)) {
+                if (entry.getValue().posList.contains(pos)) {
                     res = entry.getValue();
                     break;
                 }
             }
             if (res != ImageEntity.EMPTY) {
-                posQuickMap.put(posLong, res);
+                posQuickMap.put(pos, res);
             }
             return res;
         }
@@ -200,7 +201,7 @@ public class ImageEntityCache {
             //The posList may be empty
             if (!imageEntity.posList.isEmpty()) {
                 removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
-            }else{
+            } else {
                 removeEvent(imageEntity);
             }
             imageEntity.dispose();
@@ -292,6 +293,7 @@ public class ImageEntityCache {
         return ImageEntity.EMPTY;
     }
 
+    // TODO: 2021/9/3 move the below codes to another class not relate to the Minecraft
     //If the cache is full, we will add the image to the cache by the distance to viewer.
     //The images may be clean up by GC, so the sort result will not be so stable.
     //The images may load and unload alternatively.
@@ -300,7 +302,7 @@ public class ImageEntityCache {
     private void delayAdd(ImageEntity imageEntity) {
         synchronized (waitAddList) {
             BlockPos blockPos = BlockPos.fromLong(imageEntity.getFirstID());
-            double distance = blockPos.distanceSq(new BlockPos(viewerPos));
+            double distance = blockPos.distanceSq(new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ()));
             waitAddList.add(new SoftReference<>(ImageWithDistance.create(imageEntity, blockPos, distance)));
         }
     }
@@ -308,7 +310,7 @@ public class ImageEntityCache {
     public void tryProcessWaitQueue() {
         if (!waitAddList.isEmpty()) {
             List<ImageWithDistance> imageWithDistanceList = new LinkedList<>();
-            BlockPos viewer = new BlockPos(viewerPos);
+            BlockPos viewer = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
             //Try to sort the image entity by distance.
             synchronized (waitAddList) {
                 for (SoftReference<ImageWithDistance> softReference : waitAddList) {
@@ -357,7 +359,7 @@ public class ImageEntityCache {
 
             for (Map.Entry<String, ImageEntity> stringImageEntityEntry : cacheMap.entrySet()) {
                 String url = stringImageEntityEntry.getKey();
-                if(!recordUrls.contains(url)) {
+                if (!recordUrls.contains(url)) {
                     remove.add(url);
                 }
             }

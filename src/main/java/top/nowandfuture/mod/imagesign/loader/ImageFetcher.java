@@ -5,12 +5,8 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.ObservableOnSubscribe;
-import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.core.Scheduler;
-import io.reactivex.rxjava3.disposables.Disposable;
 import io.reactivex.rxjava3.schedulers.Schedulers;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.vector.Vector3d;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
@@ -73,7 +69,7 @@ public enum ImageFetcher {
         config.orgImageSaveDir = dirName;
     }
 
-    public ImageEntity grabImage(String url, BlockPos pos) {
+    public ImageEntity grabImage(String url, long pos) {
         return checkCache(url, pos).blockingFirst(ImageEntity.EMPTY);
     }
 
@@ -113,7 +109,7 @@ public enum ImageFetcher {
         blackUrls.remove(url);
     }
 
-    public void reloadImageSmooth(String url, BlockPos blockPos) {
+    public void reloadImageSmooth(String url, long blockPos) {
         if (cache.contain(url)) {
             try {
                 deleteTempFile(url);
@@ -125,7 +121,7 @@ public enum ImageFetcher {
         }
     }
 
-    public @NonNull Observable<ImageEntity> get(String url, BlockPos blockPos, Scheduler curSch) {
+    public @NonNull Observable<ImageEntity> get(String url, long blockPos, Scheduler curSch) {
         //fetch from cache
         return Observable.concat(this.load(url, blockPos), this.fetch(url, blockPos))
                 .first(ImageEntity.EMPTY)
@@ -140,18 +136,18 @@ public enum ImageFetcher {
                 });
     }
 
-    private Observable<ImageEntity> checkCache(String url, BlockPos pos) {
+    private Observable<ImageEntity> checkCache(String url, long pos) {
         return Observable.create(e -> {
             final ImageEntity queryEntity = getCache().findByPos(pos);
             //If the url changed, remove the position.
             if (queryEntity != ImageEntity.EMPTY && !url.equals(queryEntity.url)) {
-                getCache().removeEntity(queryEntity.url, pos.toLong());
+                getCache().removeEntity(queryEntity.url, pos);
             }
 
             //If find the url, try to merge the position.
             if (getCache().contain(url)) {
                 final ImageEntity entity = getCache().get(url);
-                entity.merge(url, pos.toLong());
+                entity.merge(url, pos);
                 e.onNext(entity);
             }
 
@@ -159,14 +155,14 @@ public enum ImageFetcher {
         });
     }
 
-    private Observable<ImageEntity> load(String url, BlockPos blockPos) {
+    private Observable<ImageEntity> load(String url, long blockPos) {
         return Observable.create((ObservableOnSubscribe<ImageEntity>) e -> {
             final String name = encodeUrl(url);
             final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
             LOGGER.info("Loading image: {}", url);
             final ImageLoader.ImageData data = loadFromDisk(diskPath);
             if (data != null) {
-                final ImageEntity entity = ImageEntity.create(url, blockPos.toLong(), data);
+                final ImageEntity entity = ImageEntity.create(url, blockPos, data);
                 LOGGER.info("Image loaded: {}", url);
 
                 entity.setImageInfo(data.getImageInfo());
@@ -197,7 +193,7 @@ public enum ImageFetcher {
         }).subscribeOn(Schedulers.io());
     }
 
-    private Observable<ImageEntity> fetch(String url, BlockPos blockPos) {
+    private Observable<ImageEntity> fetch(String url, long blockPos) {
         return Observable.create((ObservableOnSubscribe<ImageEntity>) e -> {
             final String name = encodeUrl(url);
             final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
@@ -211,7 +207,7 @@ public enum ImageFetcher {
                 LOGGER.info("Loading image: {}", url);
                 ImageLoader.ImageData data = loadFromDisk(diskPath);
                 if (data != null) {
-                    final ImageEntity entity = ImageEntity.create(url, blockPos.toLong(), data);
+                    final ImageEntity entity = ImageEntity.create(url, blockPos, data);
                     entity.setImageInfo(data.getImageInfo());
                     LOGGER.info("Caching image: {}", url);
                     long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
@@ -281,22 +277,23 @@ public enum ImageFetcher {
         blackUrls.remove(url);
     }
 
-    public void refresh(BlockPos pos) {
+    public void refresh(long pos) {
+        blackUrls.clear();
         ImageEntity entity = cache.findByPos(pos);
         if (entity != null && entity != ImageEntity.EMPTY) {
             clear(entity.url, true);
         }
     }
 
-    public void refreshSmooth(BlockPos pos) {
+    public void refreshSmooth(long pos) {
         ImageEntity entity = cache.findByPos(pos);
         if (entity != null && entity != ImageEntity.EMPTY) {
             reloadImageSmooth(entity.url, pos);
         }
     }
 
-    public void removeByPos(BlockPos pos) {
-        cache.removeEntityByPos(pos.toLong());
+    public void removeByPos(long pos) {
+        cache.removeEntityByPos(pos);
     }
 
     public boolean isInBlackList(String url) {

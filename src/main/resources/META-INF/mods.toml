@@ -27,14 +27,14 @@ displayName="Image Sign" #mandatory
 # A URL for the "homepage" for this mod, displayed in the mod UI
 #displayURL="https://change.me.to.your.mods.homepage.example.invalid/" #optional
 # A file name (in the root of the mod JAR) containing a logo for display
-#logoFile="examplemod.png" #optional
+logoFile="imagesign_logo.png" #optional
 # A text field displayed in the mod UI
 #credits="Thanks for this example mod goes to Java" #optional
 # A text field displayed in the mod UI
 authors="nowandfuture" #optional
 # The description text for the mod (multi line!) (#mandatory)
 description='''
-A Mod to display the URL in the sign at client side.
+A Mod to display the image by the URL stored the sign only at client side.
 '''
 # A dependency - use the . to indicate dependency for a specific modid. Dependencies are optional.
 [[dependencies.imagesign]] #optional

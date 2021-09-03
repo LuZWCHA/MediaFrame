@@ -157,6 +157,7 @@ public class OpenGLImage extends Texture {
 
                 if (byteBuffer.limit() > 0) {
                     GlStateManager.bindTexture(tempId);
+                    int alignment = glGetInteger(GL_UNPACK_ALIGNMENT);
                     if (mipmapLevel >= 0) {
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                         GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -170,6 +171,9 @@ public class OpenGLImage extends Texture {
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 0.0F);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+
+                        GlStateManager.pixelStore(GL_UNPACK_ALIGNMENT, 1);
+                        GlStateManager.pixelStore(GL_UNPACK_ROW_LENGTH,  width);
                     }
 
                     error = GL11.glGetError();
@@ -180,13 +184,16 @@ public class OpenGLImage extends Texture {
                     for (int i = 0; i < mipmapLevel; i++) {
                         //Send texel data to OpenGL
                         if (channel == 4) {
-                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
 //                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, byteBuffer);
                         } else if (channel == 3) {
-                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB8, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
 //                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
                         }
                     }
+
+                    GlStateManager.pixelStore(GL_UNPACK_ROW_LENGTH, 0);
+                    GlStateManager.pixelStore(GL_UNPACK_ALIGNMENT, alignment);
 
                     error = GL11.glGetError();
                     if (error != GL_NO_ERROR) {
