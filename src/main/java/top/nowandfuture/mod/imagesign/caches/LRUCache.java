@@ -1,13 +1,12 @@
 package top.nowandfuture.mod.imagesign.caches;
 
 
-import org.jetbrains.annotations.Nullable;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import java.util.*;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+//Get the eldest removed entry...
 class LRUCache<K,V> extends LinkedHashMap<K,V>{
-    private int capacity;
+    private final int capacity;
 
     public LRUCache(int capacity) {
         super(capacity, 0.75F, true);

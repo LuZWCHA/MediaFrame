@@ -4,11 +4,17 @@ import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.ObservableOnSubscribe;
 import io.reactivex.rxjava3.core.Scheduler;
+import io.reactivex.rxjava3.functions.Action;
+import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.schedulers.Schedulers;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import net.minecraft.client.Minecraft;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.vector.Vector3d;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 import top.nowandfuture.mod.imagesign.utils.Utils;
@@ -24,60 +30,48 @@ import java.util.Set;
 public enum ImageFetcher {
     INSTANCE;
 
-    private CacheSetting config;
-
-    private ImageEntityCache cache;
+    private SaveConfig config;
+    private final ImageEntityCache list;
 
     private ImageLoader loader;
-    private final Logger LOGGER;
+    private final Logger logger;
 
     private final Set<String> blackUrls;
-    private boolean isInit = false;
 
-    ImageFetcher() {
-        this.LOGGER = LogManager.getLogger(getClass());
+    ImageFetcher(){
+        //default config
+        this(new SaveConfig(Minecraft.getInstance().gameDir.getAbsolutePath(), "image_temps","image_temps2"));
+    }
+
+    ImageFetcher(@NonNull SaveConfig config){
+        this.config = config;
+        this.logger =  LoggerFactory.getLogger(getClass());
+        this.list = new ImageEntityCache(config.cacheMaxSize, config.imageMaxSize, config.cacheMemoryLimit);
         //default image loader
         this.loader = new ImageIOLoader();
         this.blackUrls = new HashSet<>();
-    }
 
-    public synchronized void init(@NonNull ImageFetcher.CacheSetting config) {
-        this.config = config;
-        if (this.cache == null) {
-            this.cache = new ImageEntityCache(config.cacheMaxSize, config.imageMaxSize, config.cacheMemoryLimit);
-            isInit = true;
-            this.LOGGER.info("Initializing image fetcher..., the config setting is: {}", config);
-        } else {
-            isInit = false;
-            resetCache(config);
-            isInit = true;
-        }
-
-    }
-
-    public synchronized void resetCache(@NonNull ImageFetcher.CacheSetting config) {
-        this.cache.reset(config.cacheMaxSize, config.imageMaxSize, config.cacheMemoryLimit);
-        this.LOGGER.info("Reset image fetcher..., the config setting is: {}", config);
+        this.logger.info("Initializing image fetcher..., the config setting is: {}",config);
     }
 
     public ImageEntityCache getCache() {
-        return cache;
+        return list;
     }
 
-    public void setSavePath(String path, String dirName) {
+    public void setSavePath(String path, String dirName){
         config.defaultDiskSavePath = path;
         config.orgImageSaveDir = dirName;
     }
 
-    public ImageEntity grabImage(String url, long pos) {
+    public ImageEntity grabImage(String url, BlockPos pos){
         return checkCache(url, pos).blockingFirst(ImageEntity.EMPTY);
     }
 
-    public void dispose() {
-        if (RenderSystem.isOnRenderThreadOrInit()) {
-            cache.dispose();
+    public void dispose(){
+        if(RenderSystem.isOnRenderThreadOrInit()){
+            list.dispose();
             blackUrls.clear();
-        } else {
+        }else{
             RenderSystem.recordRenderCall(new IRenderCall() {
                 @Override
                 public void execute() {
@@ -88,157 +82,131 @@ public enum ImageFetcher {
 
     }
 
-    @Deprecated
-    public void reload() {
-        LOGGER.info("Reload GLSources: {} images to reload.", cache.size());
-        cache.markUpdate();
+    public void reload(){
+        logger.info("Reload GLSources: {} images to reload.", list.size());
+        list.markUpdate();
     }
 
     public void clear(String url, boolean deleteFile) {
-        if (cache.contain(url)) {
-            if (deleteFile) {
+        if(list.contain(url)){
+            if(deleteFile){
                 try {
                     deleteTempFile(url);
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
             }
-            cache.removeImage(url);
+            list.removeImage(url);
         }
 
         blackUrls.remove(url);
     }
 
-    public void reloadImageSmooth(String url, long blockPos) {
-        if (cache.contain(url)) {
-            try {
-                deleteTempFile(url);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            ImageLoadTask loadTask = new ImageLoadTask.SignImageLoadTask(blockPos, url);
-            ImageLoadManager.INSTANCE.addToLoad(loadTask);
-        }
-    }
-
-    public @NonNull Observable<ImageEntity> get(String url, long blockPos, Scheduler curSch) {
+    public @NonNull Observable<ImageEntity> get(String url, BlockPos blockPos, Scheduler curSch){
         //fetch from cache
         return Observable.concat(this.load(url, blockPos), this.fetch(url, blockPos))
                 .first(ImageEntity.EMPTY)
                 .observeOn(curSch)
                 .toObservable()
-                .doOnError(throwable -> {
-                    if (throwable instanceof OutOfMemoryError) {
-                        LOGGER.warn("Check the config to increase the memory:)");
-                    } else {
-                        LOGGER.info("Observer stream: ", throwable);
+                .doOnError(new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Throwable {
+                        if(throwable instanceof OutOfMemoryError){
+                            logger.debug("check the config to expand the memory: ", throwable);
+                        }else {
+                            logger.info("Observer stream: ", throwable);
+                        }
                     }
                 });
     }
 
-    private Observable<ImageEntity> checkCache(String url, long pos) {
-        return Observable.create(e -> {
-            final ImageEntity queryEntity = getCache().findByPos(pos);
-            //If the url changed, remove the position.
-            if (queryEntity != ImageEntity.EMPTY && !url.equals(queryEntity.url)) {
-                getCache().removeEntity(queryEntity.url, pos);
+    private Observable<ImageEntity> checkCache(String url, BlockPos pos){
+        return Observable.create(new ObservableOnSubscribe<ImageEntity>() {
+            @Override
+            public void subscribe(ObservableEmitter<ImageEntity> e) throws Exception {
+                if(getCache().contain(url)) {
+                    logger.debug("Find the image: {}", url);
+                    ImageEntity entity = getCache().get(url);
+                    entity.merge(url, pos);
+                    e.onNext(entity);
+                }
+                e.onComplete();
             }
-
-            //If find the url, try to merge the position.
-            if (getCache().contain(url)) {
-                final ImageEntity entity = getCache().get(url);
-                entity.merge(url, pos);
-                e.onNext(entity);
-            }
-
-            e.onComplete();
         });
     }
 
-    private Observable<ImageEntity> load(String url, long blockPos) {
-        return Observable.create((ObservableOnSubscribe<ImageEntity>) e -> {
-            final String name = encodeUrl(url);
-            final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
-            LOGGER.info("Loading image: {}", url);
-            final ImageLoader.ImageData data = loadFromDisk(diskPath);
-            if (data != null) {
-                final ImageEntity entity = ImageEntity.create(url, blockPos, data);
-                LOGGER.info("Image loaded: {}", url);
+    private Observable<ImageEntity> load(String url, BlockPos blockPos){
+        return Observable.create(new ObservableOnSubscribe<ImageEntity>() {
+            @Override
+            public void subscribe(ObservableEmitter<ImageEntity> e) throws Exception {
+                String name = encodeUrl(url);
+                Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
+                logger.info("Loading image: {}", url);
+                ImageLoader.ImageData data = loadFromDisk(diskPath);
+                if (data != null) {
+                    ImageEntity entity = ImageEntity.create(url, blockPos, data);
+                    logger.info("Image loaded: {}", url);
 
-                entity.setImageInfo(data.getImageInfo());
-                LOGGER.info("Caching image: {}", url);
-
-                long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
-                long imageSize = entity.imageInfo.getSize();
-                if (imageSize > sizeLimit) {
-                    e.tryOnError(new RuntimeException(
-                            String.format("Image is too big, the image max size limit is: %d, but the image size is %d.",
-                                    sizeLimit, imageSize)
-                    ));
-                } else {
-                    final ImageEntity added = cache.add(entity);
-                    if (added.equals(ImageEntity.EMPTY)) {
+                    entity.setImageInfo(data.getImageInfo());
+                    logger.info("Caching image: {}", url);
+                    ImageEntity added = list.add(entity);
+                    if(added.equals(ImageEntity.EMPTY)){
                         e.tryOnError(
                                 new OutOfMemoryError(
                                         String.format("Out of memory of Cache: cache left memory is %d bytes, " +
                                                         "but the object entry's size is %d bytes.",
-                                                cache.getLeftMemory(), entity.imageInfo.getSize())));
-                    } else {
-                        LOGGER.info("Cached image: {}", url);
+                                                list.getLeftMemory(), entity.imageInfo.getSize())));
+                    }else{
+                        logger.info("Cached image: {}", url);
                         e.onNext(entity);
                     }
                 }
+                e.onComplete();
             }
-            e.onComplete();
+
         }).subscribeOn(Schedulers.io());
     }
 
-    private Observable<ImageEntity> fetch(String url, long blockPos) {
-        return Observable.create((ObservableOnSubscribe<ImageEntity>) e -> {
-            final String name = encodeUrl(url);
-            final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
-            final File parentDir = diskPath.toFile().getParentFile();
-            if (!parentDir.exists()) {
-                Files.createDirectories(parentDir.toPath());
-            }
-            LOGGER.info("Downloading image: {}", url);
-            final File file = loader.fetch(url, diskPath.toFile());
-            if (file != null) {
-                LOGGER.info("Loading image: {}", url);
-                ImageLoader.ImageData data = loadFromDisk(diskPath);
-                if (data != null) {
-                    final ImageEntity entity = ImageEntity.create(url, blockPos, data);
-                    entity.setImageInfo(data.getImageInfo());
-                    LOGGER.info("Caching image: {}", url);
-                    long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
-                    long imageSize = entity.imageInfo.getSize();
-                    if (imageSize > sizeLimit) {
-                        e.tryOnError(new RuntimeException(
-                                String.format("Image is too big, the image max size limit is: %d, but the image size is %d.",
-                                        sizeLimit, imageSize)
-                        ));
-                    } else {
-                        final ImageEntity added = cache.add(entity);
-                        if (added.equals(ImageEntity.EMPTY)) {
+    private Observable<ImageEntity> fetch(String url, BlockPos blockPos){
+        return Observable.create(new ObservableOnSubscribe<ImageEntity>() {
+            @Override
+            public void subscribe(ObservableEmitter<ImageEntity> e) throws Exception {
+                String name = encodeUrl(url);
+                Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
+                File parentDir = diskPath.toFile().getParentFile();
+                if(!parentDir.exists()){
+                    Files.createDirectories(parentDir.toPath());
+                }
+                logger.info("Downloading image: {}", url);
+                File file = loader.fetch(url, diskPath.toFile());
+                if (file != null) {
+                    logger.info("Loading image: {}", url);
+                    ImageLoader.ImageData data = loadFromDisk(diskPath);
+                    if(data != null) {
+                        ImageEntity entity = ImageEntity.create(url, blockPos, data);
+                        entity.setImageInfo(data.getImageInfo());
+                        logger.info("Caching image: {}", url);
+                        ImageEntity added = list.add(entity);
+                        if(added.equals(ImageEntity.EMPTY)){
                             e.tryOnError(new OutOfMemoryError("out of memory of Cache: cache left memory is " +
-                                    cache.getLeftMemory() + "the image entry is " + entity.imageInfo.getSize()));
-                        } else {
-                            LOGGER.info("Cached image: {}", url);
+                                    list.getLeftMemory() + "the image entry is " + entity.imageInfo.getSize()));
+                        }else{
+                            logger.info("Cached image: {}", url);
                             e.onNext(entity);
                             e.onComplete();
                         }
+                    }else{
+                        e.tryOnError(new RuntimeException("Unknown Error: download success but the file can not load!"));
                     }
-                } else {
-                    e.tryOnError(new RuntimeException("Unknown Error: download success but the file can not load!"));
                 }
-            }
-            e.tryOnError(new RuntimeException("Download failed, please check the Url of the file: " + url));
+                e.tryOnError(new RuntimeException("Download failed, please check the Url of the file: " + url));
 
+            }
         }).subscribeOn(Schedulers.io());
     }
 
     private ImageLoader.ImageData loadFromDisk(Path path) throws Exception {
-        if (Files.exists(path)) {
+        if(Files.exists(path)){
             return loader.load(path);
         }
 
@@ -253,15 +221,15 @@ public enum ImageFetcher {
         Files.delete(diskPath);
     }
 
-    public String encodeUrl(String url) {
+    public String encodeUrl(String url){
         String encoded = Utils.urlEncode(url);
-        if (encoded.length() > 128) {
+        if(encoded.length() > 128){
             return "scr0" + Utils.md5(url);
         }
         return "scr1" + encoded;
     }
 
-    public void setConfig(CacheSetting config) {
+    public void setConfig(SaveConfig config) {
         this.config = config;
     }
 
@@ -269,47 +237,41 @@ public enum ImageFetcher {
         this.loader = loader;
     }
 
-    public void addToBlackList(String url) {
+    public void addToBlackList(String url){
         blackUrls.add(url);
     }
 
-    public void removeFromBlackList(String url) {
+    public void removeFromBlackList(String url){
         blackUrls.remove(url);
     }
 
-    public void refresh(long pos) {
-        blackUrls.clear();
-        ImageEntity entity = cache.findByPos(pos);
-        if (entity != null && entity != ImageEntity.EMPTY) {
+    public void refresh(BlockPos pos){
+        ImageEntity entity = list.findByPos(pos);
+        if(entity != null && entity != ImageEntity.EMPTY){
             clear(entity.url, true);
         }
     }
 
-    public void refreshSmooth(long pos) {
-        ImageEntity entity = cache.findByPos(pos);
-        if (entity != null && entity != ImageEntity.EMPTY) {
-            reloadImageSmooth(entity.url, pos);
+    public void reRender(BlockPos pos){
+        ImageEntity entity = list.findByPos(pos);
+        if(entity != null && entity != ImageEntity.EMPTY){
+            entity.markUpdate();
         }
     }
 
-    public void removeByPos(long pos) {
-        cache.removeEntityByPos(pos);
-    }
-
-    public boolean isInBlackList(String url) {
+    public boolean isInBlackList(String url){
         return blackUrls.contains(url);
     }
 
-
-    public void onTick(Vector3d vector3d) {
-        if (isInit) cache.updateViewerPos(vector3d);
+    public void onTick(Vector3d vector3d){
+        list.updateViewerPos(vector3d);
     }
 
-    public void setCacheListener(ImageEntityCache.CacheChangeListener listener) {
-        cache.setCacheChangeListener(listener);
+    public void setCacheListener(ImageEntityCache.CacheChangeListener listener){
+        list.setCacheChangeListener(listener);
     }
 
-    public static class CacheSetting {
+    public static class SaveConfig{
         public int cacheMaxSize;
         public long cacheMemoryLimit;
         public String defaultDiskSavePath;
@@ -321,14 +283,13 @@ public enum ImageFetcher {
         private static final int DEFAULT_CACHE_MAX_SIZE = 100;
         private static final long DEFAULT_CACHE_MEMORY_LIMIT = 200L << 20;
 
-        public CacheSetting(String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir) {
-            this(DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_MEMORY_LIMIT, DEFAULT_IMAGE_MAX_SIZE, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir);
-            //Test small cache
-            //Test small memory limit
+        public SaveConfig(String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir){
+            this(DEFAULT_CACHE_MAX_SIZE, DEFAULT_CACHE_MEMORY_LIMIT, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir, DEFAULT_IMAGE_MAX_SIZE);
+            //Do test
 //            this(2, 2 << 20, defaultDiskSavePath, orgImageSaveDir, thumbnailSaveDir, DEFAULT_IMAGE_MAX_SIZE);
         }
 
-        public CacheSetting(int cacheMaxSize, long cacheMemoryLimit, long imageMaxSize, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir) {
+        public SaveConfig(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir, long imageMaxSize) {
             this.cacheMaxSize = cacheMaxSize;
             this.cacheMemoryLimit = cacheMemoryLimit;
             this.defaultDiskSavePath = defaultDiskSavePath;
@@ -337,7 +298,7 @@ public enum ImageFetcher {
             this.imageMaxSize = imageMaxSize;
         }
 
-        public CacheSetting(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir) {
+        public SaveConfig(int cacheMaxSize, long cacheMemoryLimit, String defaultDiskSavePath, String orgImageSaveDir, String thumbnailSaveDir) {
             this.cacheMaxSize = cacheMaxSize;
             this.cacheMemoryLimit = cacheMemoryLimit;
             this.defaultDiskSavePath = defaultDiskSavePath;
@@ -348,16 +309,57 @@ public enum ImageFetcher {
         @Override
         public String toString() {
             return "SaveConfig{" +
-                    ", imageMaxSize=" + imageMaxSize +
                     "cacheMaxSize=" + cacheMaxSize +
                     ", cacheMemoryLimit=" + cacheMemoryLimit +
                     ", defaultDiskSavePath='" + defaultDiskSavePath + '\'' +
                     ", orgImageSaveDir='" + orgImageSaveDir + '\'' +
                     ", thumbnailSaveDir='" + thumbnailSaveDir + '\'' +
+                    ", imageMaxSize=" + imageMaxSize +
                     '}';
         }
     }
 
+    public static void main(String[] args) throws InterruptedException {
+        ImageFetcher.INSTANCE.get("https://pic3.zhimg.com/80/v2-178de5817581ff4f82ef768cb35bfc66_720w.jpg", BlockPos.ZERO, Schedulers.single())
+                .blockingSubscribe(new Consumer<ImageEntity>() {
+                    @Override
+                    public void accept(ImageEntity imageEntity) throws Throwable {
+                        System.out.println("success!!!");
+                        System.out.println(imageEntity.url);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Throwable {
+                        System.out.println("error!!!");
+                        System.out.println(throwable.toString());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Throwable {
+                        System.out.println("complete!!!");
+                    }
+                });
+        ImageFetcher.INSTANCE.get("https://pic1.zhimg.com/v2-4bba972a094eb1bdc8cbbc55e2bd4ddf_1440w.jpg?source=172ae18b", BlockPos.ZERO, Schedulers.single())
+                .blockingSubscribe(new Consumer<ImageEntity>() {
+                    @Override
+                    public void accept(ImageEntity imageEntity) throws Throwable {
+                        System.out.println("success!!!");
+                        System.out.println(imageEntity.url);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Throwable {
+                        System.out.println("error!!!");
+                        System.out.println(throwable.toString());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Throwable {
+                        System.out.println("complete!!!");
+                    }
+                });
+        
+    }
 }
 
 

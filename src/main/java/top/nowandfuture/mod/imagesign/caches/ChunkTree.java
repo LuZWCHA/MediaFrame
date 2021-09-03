@@ -7,7 +7,7 @@ package top.nowandfuture.mod.imagesign.caches;
  *
  */
 
-// TODO: 2021/8/23 spilt the  
+// TODO: 2021/8/23 speed up the query operation in the cache.
 public class ChunkTree {
 
 }

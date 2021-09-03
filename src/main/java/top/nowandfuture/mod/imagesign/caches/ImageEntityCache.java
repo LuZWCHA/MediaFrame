@@ -1,35 +1,31 @@
 package top.nowandfuture.mod.imagesign.caches;
 
-import io.netty.util.collection.LongObjectHashMap;
-import io.netty.util.collection.LongObjectMap;
-import it.unimi.dsi.fastutil.longs.LongList;
-import org.jetbrains.annotations.NotNull;
-import top.nowandfuture.mod.imagesign.loader.Vector3d;
-
-import java.lang.ref.SoftReference;
-import java.util.*;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.vector.Vector3d;
+import org.jetbrains.annotations.NotNull;
+import top.nowandfuture.mod.imagesign.RenderQueue;
 
+import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class ImageEntityCache {
-    private top.nowandfuture.mod.imagesign.loader.Vector3d viewerPos;
+    private Vector3d viewerPos;
 
-    private long memoryLimit;
-    private int size;
-    private long singleImageMaxSize;
+    private final long memoryLimit;
+    private final int size;
+    private final long singleImageMaxSize;
     private long curMemory;
-    private LRUCache<String, ImageEntity> cacheMap;
-    private Map<Long, ImageEntity> posQuickMap;
+    private final LRUCache<String, ImageEntity> cacheMap;
+    private final Map<Long, ImageEntity> posQuickMap;
 
     private CacheChangeListener cacheChangeListener;
 
-    public interface CacheChangeListener {
-        void remove(ImageEntity imageEntity, long... positions);
 
-        void add(ImageEntity imageEntity, long... positions);
+    public interface CacheChangeListener{
+        void remove(ImageEntity imageEntity, BlockPos... positions);
+        void add(ImageEntity imageEntity, BlockPos... positions);
     }
 
     //reserve 10 MB memory
@@ -45,93 +41,67 @@ public class ImageEntityCache {
         this.singleImageMaxSize = singleImageMaxSize;
     }
 
-    public synchronized void removeFromQuickQueryMap(BlockPos pos) {
-        posQuickMap.remove(pos.toLong());
-    }
-
-    public synchronized void reset(int maxSize, long singleImageMaxSize, long memoryLimit) {
-        if (maxSize == this.size && singleImageMaxSize == this.singleImageMaxSize && memoryLimit == this.memoryLimit) {
-            return;
-        }
-
-        dispose();
-
-        this.size = maxSize;
-        this.memoryLimit = memoryLimit;
-        this.cacheMap = new LRUCache<>(maxSize);
-        //the quick map may bigger than cache map because one image may has more the one sign tile entities
-        this.posQuickMap = new LRUCache<>(maxSize);
-        this.singleImageMaxSize = singleImageMaxSize;
-    }
-
-    public synchronized ImageEntity get(String url) {
+    public ImageEntity get(String url) {
         return cacheMap.get(url);
     }
 
     private AtomicBoolean posDirty = new AtomicBoolean(true);
 
-    public void updateViewerPos(@NotNull top.nowandfuture.mod.imagesign.loader.Vector3d pos) {
+    public void updateViewerPos(@NotNull Vector3d pos) {
         if (!pos.equals(this.viewerPos)) {
             this.viewerPos = pos;
             this.posDirty.set(true);
         }
     }
 
-    //This method is slow! to remove the farthest points is linear time complexity ( O(n) )
-    //If every query to do so, for a N near to the map size n, at one frame the total query time is nearly O(n^2)
-    @Deprecated
     public double removeFarthestEntities(long memorySize, double addedDistance, int a) {
-        LinkedList<ImageWithDistance> sortList = new LinkedList<>();
-        BlockPos bb = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
-
-        synchronized (this) {
-            cacheMap.forEach((s, imageEntity) -> {
-                for (long po : imageEntity.posList) {
-                    BlockPos blockPos = BlockPos.fromLong(po);
-                    ImageWithDistance imageWithDistance = ImageWithDistance.create(imageEntity, blockPos, blockPos.distanceSq(bb));
-                    sortList.add(imageWithDistance);
+        List<SortedImage> sortList = new ArrayList<>();
+        BlockPos bb = new BlockPos(viewerPos);
+        cacheMap.forEach(new BiConsumer<String, ImageEntity>() {
+            @Override
+            public void accept(String s, ImageEntity imageEntity) {
+                for (BlockPos po : imageEntity.posList) {
+                    SortedImage sortedImage = SortedImage.create(imageEntity, po, po.distanceSq(bb));
+                    sortList.add(sortedImage);
                 }
-            });
-        }
+            }
+        });
         double distance = -1;
 
         if (!sortList.isEmpty()) {
             Collections.sort(sortList);
 
-            long size = getLeftMemory();
+            int size = 0;
             boolean clearFlag = true;
 
-            final Map<ImageEntity, Integer> imageCounter = new HashMap<>();
+            Map<ImageEntity, Integer> imageCounter = new HashMap<>();
 
             for (int i = sortList.size() - 1; i >= 0; i--) {
-                ImageWithDistance imageWithDistance = sortList.get(i);
+                SortedImage sortedImage = sortList.get(i);
 
-                final int count = imageCounter.getOrDefault(imageWithDistance.imageEntity, 0);
+                final int count = imageCounter.getOrDefault(sortedImage.imageEntity, 0);
                 //It is the last image which is nearest to the viewer(one image may link to many positions)
                 //the image has no-zero size
-                if (imageWithDistance.imageEntity.posList.size() - count == 1) {
-                    size += imageWithDistance.imageEntity.imageInfo.getSize();
-                    if (addedDistance + .01 < imageWithDistance.distance && size > (a + 1) * memorySize * 1.1) {
+                if (clearFlag && sortedImage.imageEntity.posList.size() - count == 1) {
+                    size += sortedImage.imageEntity.imageInfo.getSize();
+                    if (addedDistance < sortedImage.distance && size >= (a + 1) * memorySize) {
                         distance = addedDistance;
                         clearFlag = false;
-                        imageCounter.put(imageWithDistance.imageEntity, count + 1);
-                        break;
                     }
                 }
 
-                imageCounter.put(imageWithDistance.imageEntity, count + 1);
-
-                ImageWithDistance.recycle(imageWithDistance);
+                if (clearFlag) {
+                    imageCounter.put(sortedImage.imageEntity, count + 1);
+                }
+                SortedImage.recycle(sortedImage);
             }
 
             if (clearFlag && !sortList.isEmpty()) {
                 distance = sortList.get(0).distance;
             } else if (!clearFlag) {
                 imageCounter.forEach((ImageEntity imageEntity, Integer integer) -> {
-                    //Try to remove the url but may failed because this method not thread-safe after the map sort operation
                     removeImage(imageEntity.url);
                 });
-                distance = addedDistance;
             }
 
             posDirty.set(false);
@@ -140,9 +110,10 @@ public class ImageEntityCache {
         return distance;
     }
 
-    public synchronized ImageEntity findByPos(long pos) {
-        if (posQuickMap.containsKey(pos)) {
-            return posQuickMap.get(pos);
+    public synchronized ImageEntity findByPos(BlockPos pos) {
+        final long posLong = pos.toLong();
+        if (posQuickMap.containsKey(posLong)) {
+            return posQuickMap.get(posLong);
         } else {
             ImageEntity res = ImageEntity.EMPTY;
             for (Map.Entry<String, ImageEntity> entry : cacheMap.entrySet()) {
@@ -152,16 +123,17 @@ public class ImageEntityCache {
                 }
             }
             if (res != ImageEntity.EMPTY) {
-                posQuickMap.put(pos, res);
+                posQuickMap.put(pos.toLong(), res);
             }
             return res;
         }
     }
 
-    public synchronized ImageEntity removeEntityByPos(long pos) {
-        if (posQuickMap.containsKey(pos)) {
-            ImageEntity entity = posQuickMap.get(pos);
-            return removeEntity(entity.url, pos);
+    public synchronized ImageEntity removeByBos(BlockPos pos) {
+        final long posLong = pos.toLong();
+        if (posQuickMap.containsKey(posLong)) {
+            ImageEntity entity = posQuickMap.get(posLong);
+            removeEntity(entity.url, pos);
         } else {
             ImageEntity res = ImageEntity.EMPTY;
             for (Map.Entry<String, ImageEntity> entry : cacheMap.entrySet()) {
@@ -179,11 +151,11 @@ public class ImageEntityCache {
         return null;
     }
 
-    public synchronized ImageEntity removeEntity(String url, long pos) {
-        final ImageEntity imageEntity = cacheMap.get(url);
+    public synchronized ImageEntity removeEntity(String url, BlockPos pos) {
+        ImageEntity imageEntity = cacheMap.get(url);
         if (imageEntity != null) {
-            posQuickMap.remove(pos);
-            imageEntity.posList.rem(pos);
+            posQuickMap.remove(pos.toLong());
+            imageEntity.posList.remove(pos);
             removeEvent(imageEntity, pos);
             if (imageEntity.posList.isEmpty()) {
                 removeImage(url);
@@ -194,22 +166,20 @@ public class ImageEntityCache {
     }
 
     public synchronized ImageEntity removeImage(String url) {
-        final ImageEntity imageEntity = cacheMap.remove(url);
+        ImageEntity imageEntity = cacheMap.remove(url);
         if (imageEntity != null) {
             removeAllPosFromQuickQueryMap(imageEntity.posList);
             curMemory -= imageEntity.imageInfo.getSize();
             //The posList may be empty
-            if (!imageEntity.posList.isEmpty()) {
-                removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
-            } else {
-                removeEvent(imageEntity);
+            if(!imageEntity.posList.isEmpty()) {
+                removeEvent(imageEntity, (BlockPos[]) imageEntity.posList.toArray());
             }
             imageEntity.dispose();
         }
         return imageEntity;
     }
 
-    private void removeEvent(ImageEntity imageEntity, long... positions) {
+    private void removeEvent(ImageEntity imageEntity, BlockPos... positions) {
         if (cacheChangeListener != null) {
             cacheChangeListener.remove(imageEntity, positions);
         }
@@ -227,7 +197,7 @@ public class ImageEntityCache {
 
     public synchronized void markUpdate() {
         for (Map.Entry<String, ImageEntity> stringImageEntityEntry : cacheMap.entrySet()) {
-            stringImageEntityEntry.getValue().markUpdated();
+            stringImageEntityEntry.getValue().markUpdate();
         }
     }
 
@@ -235,164 +205,102 @@ public class ImageEntityCache {
         return cacheMap.size();
     }
 
-    private void removeAllPosFromQuickQueryMap(LongList posList) {
-        for (long blockPos : posList) {
-            posQuickMap.remove(blockPos);
+    private void removeAllPosFromQuickQueryMap(List<BlockPos> posList) {
+        for (BlockPos blockPos : posList) {
+            posQuickMap.remove(blockPos.toLong());
         }
     }
 
-    public long getSingleImageMaxSize() {
-        return singleImageMaxSize;
-    }
+    private int reAddCount = 0;
+    private long frameId = -1;
+    private double lastDistance = -1;
 
     public synchronized ImageEntity add(@NotNull ImageEntity entity) {
         long imageSize = entity.imageInfo.getSize();
+        if (imageSize > singleImageMaxSize) {
+            return ImageEntity.EMPTY;
+        }
 
-        //Merge the position:
+        //Merge the position and use the new image data:
+        //remove the old one first
         if (cacheMap.containsKey(entity.url)) {
-            final ImageEntity cachedImage = cacheMap.get(entity.url);
-            boolean hasAdded = cachedImage.posList.contains(entity.getFirstID());
-            if (!hasAdded) {
-                cachedImage.posList.add(entity.getFirstID());
-                posQuickMap.put(entity.getFirstID(), cachedImage);
-            }
+            ImageEntity old = cacheMap.remove(entity.url);
+            //update positions
+            removeAllPosFromQuickQueryMap(old.posList);
 
-            cachedImage.refreshImagesData(entity);
-
-            return cachedImage;
+            curMemory -= imageSize;
+            removeEvent(old, (BlockPos[]) old.posList.toArray());
+            old.dispose();
         }
 
         if (curMemory + imageSize <= memoryLimit) {
             curMemory += imageSize;
-            final boolean removeEldest = cacheMap.size() == size;
+            boolean removeEldest = cacheMap.size() == size;
             cacheMap.put(entity.url, entity);
-            posQuickMap.put(entity.getFirstID(), entity);
+            posQuickMap.put(entity.getFirstPos().toLong(), entity);
 
-            addEvent(entity, entity.posList.toArray(new long[0]));
+            addEvent(entity, (BlockPos[]) entity.posList.toArray());
 
             //Dispose the eldest that be removed by map itself.
             if (removeEldest) {
                 Map.Entry<String, ImageEntity> entry = cacheMap.getEldest();
                 if (entry != null && !cacheMap.containsKey(entry.getKey())) {
-                    ImageEntity imageEntity = entry.getValue();
                     //remove the eldest image if out of the capacity
                     removeAllPosFromQuickQueryMap(entity.posList);
 
-                    removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
+                    removeEvent(entry.getValue(), (BlockPos[]) entry.getValue().posList.toArray());
                     entry.getValue().dispose();
                 }
             }
 
             posDirty.set(false);
+            reAddCount = 0;
             return entity;
         } else {
-//            Reach the limit.
-//            Remove the farthest.
-            delayAdd(entity);
+            if (!RenderQueue.isNearer(entity.getFirstPos(), new BlockPos(viewerPos))) {
+                //If it is not nearer than last frame's rendered images, throw out of memory error, don't add to the cache.
+                return ImageEntity.EMPTY;
+            }
+
+            //To get a memory size of imageSize
+            double ed = entity.getFirstPos().distanceSq(viewerPos.x, viewerPos.y, viewerPos.z, true);
+            double distance = -1;
+            if (frameId == RenderQueue.FRAME_COUNT - 1 && ed < lastDistance || lastDistance == -1) {
+                distance = removeFarthestEntities(imageSize, ed, reAddCount);
+            }
+
+            if (distance > 0 && reAddCount < 2) {
+                reAddCount++;
+                lastDistance = distance;
+                frameId = RenderQueue.FRAME_COUNT;
+                return add(entity);
+            }
         }
+
+        reAddCount = 0;
         return ImageEntity.EMPTY;
     }
 
-    // TODO: 2021/9/3 move the below codes to another class not relate to the Minecraft
-    //If the cache is full, we will add the image to the cache by the distance to viewer.
-    //The images may be clean up by GC, so the sort result will not be so stable.
-    //The images may load and unload alternatively.
-    private final List<SoftReference<ImageWithDistance>> waitAddList = new LinkedList<>();
-
-    private void delayAdd(ImageEntity imageEntity) {
-        synchronized (waitAddList) {
-            BlockPos blockPos = BlockPos.fromLong(imageEntity.getFirstID());
-            double distance = blockPos.distanceSq(new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ()));
-            waitAddList.add(new SoftReference<>(ImageWithDistance.create(imageEntity, blockPos, distance)));
-        }
-    }
-
-    public void tryProcessWaitQueue() {
-        if (!waitAddList.isEmpty()) {
-            List<ImageWithDistance> imageWithDistanceList = new LinkedList<>();
-            BlockPos viewer = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
-            //Try to sort the image entity by distance.
-            synchronized (waitAddList) {
-                for (SoftReference<ImageWithDistance> softReference : waitAddList) {
-                    ImageWithDistance image = softReference.get();
-                    if (image != null) {
-                        imageWithDistanceList.add(image);
-                    }
-                }
-
-                waitAddList.clear();
-            }
-
-            for (ImageEntity entity : cacheMap.values()) {
-                if (entity != null) {
-                    for (long l : entity.posList) {
-                        BlockPos blockPos = BlockPos.fromLong(l);
-                        imageWithDistanceList.add(ImageWithDistance.create(entity, blockPos, blockPos.distanceSq(viewer)));
-                    }
-                }
-            }
-
-            Collections.sort(imageWithDistanceList);
-
-            long cm = 0;
-            LongObjectMap<ImageEntity> add = new LongObjectHashMap<>();
-
-            Set<String> recordUrls = new HashSet<>();
-            for (ImageWithDistance entity : imageWithDistanceList) {
-                ImageEntity imageEntity = entity.imageEntity;
-                long size = imageEntity.imageInfo.getSize();
-
-                if (recordUrls.contains(imageEntity.url)) {
-                    size = 0;
-                }
-
-                if (cm <= memoryLimit - size) {
-                    cm += size;
-                    add.put(entity.pos, imageEntity);
-                    recordUrls.add(imageEntity.url);
-                }
-
-                ImageWithDistance.recycle(entity);
-            }
-
-            List<String> remove = new LinkedList<>();
-
-            for (Map.Entry<String, ImageEntity> stringImageEntityEntry : cacheMap.entrySet()) {
-                String url = stringImageEntityEntry.getKey();
-                if (!recordUrls.contains(url)) {
-                    remove.add(url);
-                }
-            }
-
-            for (String s : remove) {
-                removeImage(s);
-            }
-
-            for (Map.Entry<Long, ImageEntity> longImageEntityEntry : add.entrySet()) {
-                ImageEntity imageEntity = longImageEntityEntry.getValue();
-                if (!cacheMap.containsKey(imageEntity.url)) {
-                    add(imageEntity);
-                }
-            }
-        }
-
-    }
-
-    private void addEvent(ImageEntity entity, long... positions) {
-        if (cacheChangeListener != null) {
+    private void addEvent(ImageEntity entity, BlockPos... positions) {
+        if(cacheChangeListener != null){
             cacheChangeListener.add(entity, positions);
         }
     }
 
     public synchronized void dispose() {
-        cacheMap.forEach((s, imageEntity) -> {
-            imageEntity.dispose();
-            removeEvent(imageEntity, imageEntity.posList.toArray(new long[0]));
+        cacheMap.forEach(new BiConsumer<String, ImageEntity>() {
+            @Override
+            public void accept(String s, ImageEntity imageEntity) {
+                imageEntity.dispose();
+
+                for (BlockPos blockPos : imageEntity.posList) {
+                    removeEvent(imageEntity);
+                }
+            }
         });
         posQuickMap.clear();
         cacheMap.clear();
         curMemory = 0;
-        ImageWithDistance.close();
         posDirty.set(true);
     }
 
@@ -404,7 +312,7 @@ public class ImageEntityCache {
         private final Queue<T> objects;
 
         public ObjectPool() {
-            objects = new LinkedBlockingQueue<>();
+            objects = new LinkedList<>();
         }
 
         public T get() {
@@ -437,18 +345,18 @@ public class ImageEntityCache {
         }
     }
 
-    public static class ImageWithDistance implements Comparable<ImageWithDistance>, ObjectPool.IDispose {
-        public static final ThreadLocal<SortedImagePool> POOL = ThreadLocal.withInitial(SortedImagePool::new);
+    public static class SortedImage implements Comparable<SortedImage>, ObjectPool.IDispose {
+        public static final SortedImagePool POOL = new SortedImagePool();
 
         public ImageEntity imageEntity;
         public long pos;
         public double distance;
 
-        public ImageWithDistance() {
+        public SortedImage() {
 
         }
 
-        private ImageWithDistance(ImageEntity imageEntity, double distance, BlockPos pos) {
+        private SortedImage(ImageEntity imageEntity, double distance, BlockPos pos) {
             this.imageEntity = imageEntity;
             this.distance = distance;
             this.pos = pos.toLong();
@@ -465,18 +373,18 @@ public class ImageEntityCache {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
 
-            ImageWithDistance that = (ImageWithDistance) o;
+            SortedImage that = (SortedImage) o;
 
-            return pos == that.pos;
+            return imageEntity.equals(that.imageEntity);
         }
 
         @Override
         public int hashCode() {
-            return Long.hashCode(pos);
+            return super.hashCode();
         }
 
         @Override
-        public int compareTo(@NotNull ImageWithDistance o) {
+        public int compareTo(@NotNull SortedImage o) {
             double res = this.distance - o.distance;
             if (res > 0) return 1;
             else if (res < 0) return -1;
@@ -489,29 +397,25 @@ public class ImageEntityCache {
             distance = -1;
         }
 
-        public static ImageWithDistance create() {
-            return POOL.get().get();
+        public static SortedImage create() {
+            return POOL.get();
         }
 
-        public static ImageWithDistance create(ImageEntity imageEntity, BlockPos pos, double distance) {
-            ImageWithDistance imageWithDistance = POOL.get().get();
-            imageWithDistance.set(imageEntity, pos, distance);
-            return imageWithDistance;
+        public static SortedImage create(ImageEntity imageEntity, BlockPos pos, double distance) {
+            SortedImage sortedImage = POOL.get();
+            sortedImage.set(imageEntity, pos, distance);
+            return sortedImage;
         }
 
-        public static void recycle(ImageWithDistance image) {
-            POOL.get().recycle(image);
+        public static void recycle(SortedImage image) {
+            POOL.recycle(image);
         }
 
-        public static void close() {
-            POOL.get().close();
-        }
-
-        public static class SortedImagePool extends ObjectPool<ImageWithDistance> {
+        public static class SortedImagePool extends ObjectPool<SortedImage> {
 
             @Override
-            public ImageWithDistance createNew() {
-                return new ImageWithDistance();
+            public SortedImage createNew() {
+                return new SortedImage();
             }
         }
 

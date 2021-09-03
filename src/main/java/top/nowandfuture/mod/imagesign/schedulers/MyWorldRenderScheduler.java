@@ -129,7 +129,10 @@ public class MyWorldRenderScheduler extends Scheduler{
             } else {
                 tail.compareAndSet(tailPivot, queuedRunnable); // can only fail with a concurrent dispose and we don't want to override the disposed value
                 if (tailPivot == head) {
-                    RenderQueue.tryAddTask(this);
+                    boolean success = RenderQueue.tryAddTask(this);
+                    if(!success){
+                        return Disposable.disposed();
+                    }
                 }
             }
             return queuedRunnable;

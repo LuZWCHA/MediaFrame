@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.lwjgl.opengl.GL11.glIsTexture;
 
+//Thread Safe
 public class ImageEntity {
     private static final Logger LOGGER = LogManager.getLogger(ImageEntity.class);
     private static final String EMPTY_URL = "404";
@@ -78,7 +79,7 @@ public class ImageEntity {
         return create(url, pos, data.getImages());
     }
 
-    public void merge(String url, long pos) {
+    public synchronized void merge(String url, long pos) {
         if (url.equals(this.url)) {
             if (!this.posList.contains(pos)) {
                 this.posList.add(pos);
@@ -180,13 +181,14 @@ public class ImageEntity {
         updateFailCount = 0;
     }
 
+    @Deprecated
     public synchronized void markUpdated() {
         for (OpenGLImage openGLImage : orgImages) {
             openGLImage.markUpdate();
         }
     }
 
-    private AtomicBoolean toUpdate = new AtomicBoolean(true);
+    private final AtomicBoolean toUpdate = new AtomicBoolean(true);
 
     public void setToUpdate(boolean v){
         toUpdate.set(v);

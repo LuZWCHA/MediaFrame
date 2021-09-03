@@ -9,12 +9,10 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.IWorld;
 
-import java.util.HashSet;
 import java.util.PriorityQueue;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-//Thread Save
+//Thread Safe
 public enum ImageLoadManager {
     INSTANCE();
     private final ConcurrentHashMap<Long, Pair<Disposable, String>> loadingMap;
@@ -22,10 +20,8 @@ public enum ImageLoadManager {
 
     private final PriorityQueue<ImageLoadTask> toLoadQueue;
     private final LongSet posRecord;
-    private final Set<String> urlRecord;
 
     ImageLoadManager(){
-        this.urlRecord = new HashSet<>();
         this.loadingMap = new ConcurrentHashMap<>();
         this.loadingUrlsSet = new ConcurrentSet<>();
         this.toLoadQueue = new PriorityQueue<>();
@@ -75,7 +71,6 @@ public enum ImageLoadManager {
             loadingMap.clear();
             posRecord.clear();
             toLoadQueue.clear();
-            urlRecord.clear();
         }
     }
 
@@ -85,7 +80,6 @@ public enum ImageLoadManager {
         if(!posRecord.contains(pos) && !isLoading(url)) {
             toLoadQueue.add(task);
             posRecord.add(pos);
-            urlRecord.add(url);
         }
     }
 
@@ -95,7 +89,6 @@ public enum ImageLoadManager {
             ImageLoadTask loadTask = toLoadQueue.poll();
             BlockPos blockPos = BlockPos.fromLong(loadTask.getPos());
             posRecord.remove(blockPos.toLong());
-            urlRecord.remove(loadTask.getUrl());
             if(!isLoading(loadTask.getUrl())
                     && loadingMap.size() < MAX_LOAD_COUNT) {
                 loadTask.run();

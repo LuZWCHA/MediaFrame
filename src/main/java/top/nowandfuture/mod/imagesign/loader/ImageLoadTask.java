@@ -31,7 +31,7 @@ public abstract class ImageLoadTask implements Runnable, Comparable<ImageLoadTas
 
                             }, throwable -> {
                                 loadManager.removeFromLoadingList(posLong);
-                                //Thr url or the image is load successful because of the limit by the memory,
+                                //The url or the image is loaded successful because of the limit by the memory,
                                 //We may cache them next time.
                                 if(!(throwable instanceof OutOfMemoryError)) {
                                     fetcher.addToBlackList(url);

@@ -1,8 +1,5 @@
 package top.nowandfuture.mod.imagesign.loader;
 
-import com.icafe4j.image.gif.GIFFrame;
-import top.nowandfuture.mod.imagesign.caches.GIFParam;
-import top.nowandfuture.mod.imagesign.caches.IParam;
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.net.TrustAll;
@@ -37,7 +34,6 @@ public class ImageIOLoader implements ImageLoader {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         client = builder
                 .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .callTimeout(500, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
                         new TrustAll.trustManager())
                 .proxy(ProxyManager.INSTANCE.getProxy().getProxyIns())
@@ -62,7 +58,7 @@ public class ImageIOLoader implements ImageLoader {
             ImageReader reader = ImageIO.getReader(ImageType.GIF);
             return get(reader, format.getExtension(), path.toFile());
         } else if (!format.equals(ImageType.UNKNOWN)) {
-            BufferedImage bufferedImage;
+            BufferedImage bufferedImage = null;
             try (FileInputStream fileInputStream = new FileInputStream(path.toFile())){
                  bufferedImage = ImageIO.read(fileInputStream);
             }
@@ -82,17 +78,9 @@ public class ImageIOLoader implements ImageLoader {
             reader.read(inputStream);
             List<BufferedImage> bufferedImages = reader.getFrames();
             if (bufferedImages != null) {
-                IParam otherInfo = null;
+                Object otherInfo = null;
                 if (reader instanceof GIFReader) {
-                    if(!((GIFReader) reader).getGIFFrames().isEmpty()) {
-                        GIFFrame frame = ((GIFReader) reader).getGIFFrame(0);
-                        otherInfo = GIFParam.Builder. newBuild(frame.getFrameWidth(), frame.getFrameHeight(), frame.getLeftPosition(), frame.getTopPosition(), frame.getDelay(), frame.getTransparentColor())
-                                .setDisposalMethod(frame.getDisposalMethod())
-                                .setTransparencyFlag(frame.getTransparencyFlag())
-                                .setUserInputFlag(frame.getUserInputFlag())
-                                .build();
-
-                    }
+                    otherInfo = ((GIFReader) reader).getGIFFrames();
                 }
                 res = new ImageData(format, otherInfo, bufferedImages);
             }

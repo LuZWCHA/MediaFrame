@@ -4,11 +4,13 @@ import it.unimi.dsi.fastutil.longs.*;
 
 import java.util.concurrent.atomic.AtomicLong;
 
+
+//Make the same url sources has different gif start time.
 public enum GIFImagePlayManager {
     INSTANCE;
 
     private final Long2LongMap long2LongMap;
-    private AtomicLong tick;
+    private final AtomicLong tick;
 
     GIFImagePlayManager() {
         long2LongMap = new Long2LongOpenHashMap();
