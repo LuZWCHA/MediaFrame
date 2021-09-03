@@ -43,7 +43,7 @@ public class ImageSign {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::doClientStuff);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onLoad);
-        RenderQueue.init(5, 2);
+        RenderQueue.init(50, 2);
         proxy = DistExecutor.safeRunForDist(() -> ClientProxy::new, () -> CommonProxy::new);
         INSTANCE = this;
     }

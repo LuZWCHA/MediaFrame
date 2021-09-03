@@ -20,7 +20,7 @@ public class RenderQueue {
     private static final Queue<Runnable> waitQueue = new LinkedBlockingQueue<>();
     private static int limit = 5;
     private static long exceptWaitTime = 2;
-    private static int maxLimit = 20 , minLimit = 1;
+    private static int maxLimit = 20, minLimit = 1;
 
     private static final PriorityQueue<ImageEntityCache.ImageWithDistance> distanceQueue = new PriorityQueue<>();
     private static final LongSet posSet = new LongOpenHashSet();
@@ -28,70 +28,70 @@ public class RenderQueue {
 
     public static long FRAME_COUNT = 0;
 
-    private RenderQueue(){
+    private RenderQueue() {
 
     }
 
-    public static void init(int maxLimit, long exceptWaitTime){
+    public static void init(int maxLimit, long exceptWaitTime) {
         init(Math.max(1, maxLimit >> 1), maxLimit, 1, exceptWaitTime);
     }
 
-    public static void init(int limit, int maxLimit, int minLimit, long exceptWaitTime){
+    public static void init(int limit, int maxLimit, int minLimit, long exceptWaitTime) {
         RenderQueue.limit = limit;
         RenderQueue.exceptWaitTime = exceptWaitTime;
         RenderQueue.maxLimit = maxLimit;
         RenderQueue.minLimit = minLimit;
     }
 
-    public static void doTasks(){
+    public static void doTasks() {
         long start = System.currentTimeMillis();
-        if(queue.size() < limit){
-            while (!waitQueue.isEmpty() && queue.size() <= limit){
+        if (queue.size() < limit) {
+            while (!waitQueue.isEmpty() && queue.size() <= limit) {
                 queue.add(waitQueue.poll());
             }
         }
 
-        while (!queue.isEmpty()){
+        while (!queue.isEmpty()) {
             try {
                 queue.poll().run();
-            }catch (Exception ignored){
+            } catch (Exception ignored) {
 
             }
         }
 
         long t = System.currentTimeMillis() - start;
-        if(t > exceptWaitTime && limit > minLimit){
-            if(t / exceptWaitTime > 2){
-                if(limit > 3) {
+        if (t > exceptWaitTime && limit > minLimit) {
+            if (t / exceptWaitTime > 2) {
+                if (limit > 3) {
                     limit >>>= 1;
-                }else{
+                } else {
                     limit -= 2;
                 }
-            }else{
+            } else {
                 limit--;
             }
 
-        }else if(t < exceptWaitTime && limit < maxLimit){
-            limit ++;
+        } else if (t < exceptWaitTime && limit < maxLimit) {
+            limit++;
         }
     }
 
-    public static void runTask(Runnable runnable){
+    public static void runTask(Runnable runnable) {
         queue.add(runnable);
     }
 
-    public static void clearQueue(){
+    public static void clearQueue() {
         queue.clear();
         distanceQueue.clear();
         waitQueue.clear();
         posSet.clear();
     }
 
-    public static Runnable poll(){
+    public static Runnable poll() {
         return queue.poll();
     }
 
-    public static boolean isQueueEmpty(){
+    public static boolean isQueueEmpty() {
         return queue.isEmpty();
     }
 
@@ -103,8 +103,8 @@ public class RenderQueue {
      * the task will be executed at any time after the render time point. In the baddest way, this task may not be done in the
      * future.
      */
-    public static boolean tryAddTask(Runnable runnable){
-        if(queue.size() < limit){
+    public static boolean tryAddTask(Runnable runnable) {
+        if (queue.size() < limit) {
             runTask(runnable);
             return true;
         }
@@ -112,31 +112,32 @@ public class RenderQueue {
         return false;
     }
 
-    public static void addNextFrameRenderObj(ImageEntity entity, BlockPos pos, double distance){
+    public static void addNextFrameRenderObj(ImageEntity entity, BlockPos pos, double distance) {
         distanceQueue.add(ImageEntityCache.ImageWithDistance.create(entity, pos, distance));
     }
 
     private static int maxRenderObjCount = 30;
-    public static void updateQuerySet(){
+
+    public static void updateQuerySet() {
         posSet.clear();
         int i = 0;
-        while (!distanceQueue.isEmpty()){
+        while (!distanceQueue.isEmpty()) {
             ImageEntityCache.ImageWithDistance imageWithDistance = distanceQueue.poll();
-            if(i ++ < maxRenderObjCount) {
+            if (i++ < maxRenderObjCount) {
                 posSet.add(imageWithDistance.pos);
             }
-            if(i == maxRenderObjCount){
+            if (i == maxRenderObjCount) {
                 farthestPos = imageWithDistance.pos;
             }
             ImageEntityCache.ImageWithDistance.recycle(imageWithDistance);
         }
     }
 
-    public static boolean isInPosSet(BlockPos pos){
+    public static boolean isInPosSet(BlockPos pos) {
         return posSet.contains(pos.toLong());
     }
 
-    public static boolean isNearer(BlockPos pos, BlockPos viewer){
+    public static boolean isNearer(BlockPos pos, BlockPos viewer) {
         return pos.distanceSq(viewer) < viewer.distanceSq(BlockPos.fromLong(farthestPos));
     }
 
