@@ -1,5 +1,8 @@
 package top.nowandfuture.mod.imagesign.loader;
 
+import com.icafe4j.image.gif.GIFFrame;
+import top.nowandfuture.mod.imagesign.caches.GIFParam;
+import top.nowandfuture.mod.imagesign.caches.IParam;
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.net.TrustAll;
@@ -27,20 +30,21 @@ import java.util.concurrent.TimeUnit;
 
 public class ImageIOLoader implements ImageLoader {
     private OkHttpClient client;
-    private int retry = 3;
+    private int retryTime = 3;
 
 
     public ImageIOLoader() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         client = builder
                 .connectTimeout(500, TimeUnit.MILLISECONDS)
+                .callTimeout(500, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
                         new TrustAll.trustManager())
                 .proxy(ProxyManager.INSTANCE.getProxy().getProxyIns())
                 .build();
     }
 
-    public void setProxy(Proxy proxy){
+    public void setProxy(Proxy proxy) {
         client = client.newBuilder()
                 .connectTimeout(500, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
@@ -48,7 +52,6 @@ public class ImageIOLoader implements ImageLoader {
                 .proxy(proxy.getProxyIns())
                 .build();
     }
-
 
     @Override
     public ImageData load(Path path) throws Exception {
@@ -58,16 +61,16 @@ public class ImageIOLoader implements ImageLoader {
             ImageReader reader = ImageIO.getReader(ImageType.GIF);
             return get(reader, format.getExtension(), path.toFile());
         } else if (!format.equals(ImageType.UNKNOWN)) {
-            BufferedImage bufferedImage = null;
-            try (FileInputStream fileInputStream = new FileInputStream(path.toFile())){
-                 bufferedImage = ImageIO.read(fileInputStream);
+            BufferedImage bufferedImage;
+            try (FileInputStream fileInputStream = new FileInputStream(path.toFile())) {
+                bufferedImage = ImageIO.read(fileInputStream);
             }
             if (bufferedImage != null) {
                 return new ImageData(format.getExtension(), null, bufferedImage);
             }
             throw new RuntimeException("Image cannot be read by ImageIO, " +
                     "the format not supported or the image file is not completed.");
-        }else {
+        } else {
             throw new RuntimeException("Unknown format of Image!");
         }
     }
@@ -78,13 +81,21 @@ public class ImageIOLoader implements ImageLoader {
             reader.read(inputStream);
             List<BufferedImage> bufferedImages = reader.getFrames();
             if (bufferedImages != null) {
-                Object otherInfo = null;
+                IParam otherInfo = null;
                 if (reader instanceof GIFReader) {
-                    otherInfo = ((GIFReader) reader).getGIFFrames();
+                    if (!((GIFReader) reader).getGIFFrames().isEmpty()) {
+                        GIFFrame frame = ((GIFReader) reader).getGIFFrame(0);
+                        otherInfo = GIFParam.Builder.newBuild(frame.getFrameWidth(), frame.getFrameHeight(), frame.getLeftPosition(), frame.getTopPosition(), frame.getDelay(), frame.getTransparentColor())
+                                .setDisposalMethod(frame.getDisposalMethod())
+                                .setTransparencyFlag(frame.getTransparencyFlag())
+                                .setUserInputFlag(frame.getUserInputFlag())
+                                .build();
+
+                    }
                 }
                 res = new ImageData(format, otherInfo, bufferedImages);
             }
-        }finally {
+        } finally {
 
         }
         return res;
@@ -110,7 +121,7 @@ public class ImageIOLoader implements ImageLoader {
         final long mills = 100;
         final long maxWait = 5 * 1000;
 
-        while (temp < retry) {
+        while (temp < retryTime) {
             try {
                 boolean success = OkHttpUtil.downloadImage(client, url, saveFile);
                 if (success) {
@@ -125,17 +136,18 @@ public class ImageIOLoader implements ImageLoader {
             }
         }
 
-        if (temp >= retry) {
+        if (temp >= retryTime) {
             if (last != null) {
                 throw last;
             }
-            throw new RuntimeException("Download "+ url +
+            throw new RuntimeException("Download " + url +
                     " failed! Check the url or refresh the image again.");
         } else {
             return file;
         }
     }
 
+    @Deprecated
     public String getImageType(Object obj) {
         try (ImageInputStream inputStream = javax.imageio.ImageIO.createImageInputStream(obj)) {
             Iterator<javax.imageio.ImageReader> imageReaderIterator = javax.imageio.ImageIO.getImageReaders(inputStream);
@@ -152,9 +164,5 @@ public class ImageIOLoader implements ImageLoader {
 
     public ImageType guessImageType(Path path) throws IOException {
         return IMGUtils.guessImageType(new PeekHeadInputStream(new FileInputStream(path.toFile()), 4));
-    }
-
-    public static void main(String[] args) {
-
     }
 }

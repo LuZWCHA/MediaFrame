@@ -1,17 +1,15 @@
 package top.nowandfuture.mod.imagesign.mixin;
 
-import net.minecraft.client.Minecraft;
 import net.minecraft.tileentity.SignTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityType;
-import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.math.AxisAlignedBB;
 import net.minecraft.util.text.ITextComponent;
 import net.minecraftforge.common.extensions.IForgeTileEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
-import top.nowandfuture.mod.imagesign.loader.SignImageLoadManager;
+import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
 
 @Mixin(SignTileEntity.class)
 public abstract class MixinSignTileEntity extends TileEntity implements IForgeTileEntity {
@@ -26,8 +24,8 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
     public void remove() {
         super.remove();
         if(world != null && world.isRemote()){
-            SignImageLoadManager.INSTANCE.tryRemoveFromLoadingList((SignTileEntity) ((Object)this));
-            ImageFetcher.INSTANCE.getCache().removeByBos(pos);
+            ImageLoadManager.INSTANCE.tryRemoveFromLoadingList(pos.toLong());
+            ImageFetcher.INSTANCE.removeByPos(pos.toLong());
         }
     }
 
@@ -42,8 +40,8 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
     public void onChunkUnloaded() {
         super.onChunkUnloaded();
         if(world != null && world.isRemote()){
-            SignImageLoadManager.INSTANCE.tryRemoveFromLoadingList((SignTileEntity) ((Object)this));
-            ImageFetcher.INSTANCE.getCache().removeByBos(pos);
+            ImageLoadManager.INSTANCE.tryRemoveFromLoadingList(pos.toLong());
+            ImageFetcher.INSTANCE.removeByPos(pos.toLong());
         }
     }
 

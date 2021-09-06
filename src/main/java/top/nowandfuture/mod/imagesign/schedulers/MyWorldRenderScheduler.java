@@ -9,7 +9,7 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-
+//This scheduler is for RxJava, to run the task in the lastworldrender event
 public class MyWorldRenderScheduler extends Scheduler{
 
     private static final MyWorldRenderScheduler INSTANCE = new MyWorldRenderScheduler();
@@ -129,10 +129,7 @@ public class MyWorldRenderScheduler extends Scheduler{
             } else {
                 tail.compareAndSet(tailPivot, queuedRunnable); // can only fail with a concurrent dispose and we don't want to override the disposed value
                 if (tailPivot == head) {
-                    boolean success = RenderQueue.tryAddTask(this);
-                    if(!success){
-                        return Disposable.disposed();
-                    }
+                    RenderQueue.tryAddTask(this);
                 }
             }
             return queuedRunnable;
