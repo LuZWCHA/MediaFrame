@@ -62,7 +62,6 @@ public class ClientProxy extends CommonProxy {
 
     @SubscribeEvent
     public void oClientTick(TickEvent event) {
-        // do something when the server starts
         if (event.phase == TickEvent.Phase.START) {
             Entity entity = Minecraft.getInstance().getRenderViewEntity();
             if (entity != null) {
@@ -138,7 +137,6 @@ public class ClientProxy extends CommonProxy {
 
     @SubscribeEvent
     public void onWorldUnload(WorldEvent.Unload event) {
-        // do something when the server starts
         if (event.getWorld().isRemote()) {
             ImageLoadManager.INSTANCE.clear(event.getWorld());
             ImageFetcher.INSTANCE.dispose();
