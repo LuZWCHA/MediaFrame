@@ -6,7 +6,9 @@ import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.util.math.BlockPos;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
+import top.nowandfuture.mod.imagesign.caches.Vector3i;
 
+import javax.annotation.Nullable;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -24,7 +26,7 @@ public class RenderQueue {
     private static int maxLimit = 20, minLimit = 1;
 
     private static final PriorityQueue<ImageEntityCache.ImageWithDistance> distanceQueue = new PriorityQueue<>();
-    private static final LongSet posSet = new LongOpenHashSet();
+    private static final LongSet nearPosSet = new LongOpenHashSet();
     private static long farthestPos = -1;
 
     public static long FRAME_COUNT = 0;
@@ -85,7 +87,7 @@ public class RenderQueue {
         queue.clear();
         distanceQueue.clear();
         waitQueue.clear();
-        posSet.clear();
+        nearPosSet.clear();
     }
 
     public static Runnable poll() {
@@ -113,19 +115,19 @@ public class RenderQueue {
         return false;
     }
 
-    public static void addNextFrameRenderObj(ImageEntity entity, BlockPos pos, double distance) {
+    public static void addNextFrameRenderObj(@Nullable ImageEntity entity, Vector3i pos, double distance) {
         distanceQueue.add(ImageEntityCache.ImageWithDistance.create(entity, pos, distance));
     }
 
     private static int maxRenderObjCount = 30;
 
     public static void updateQuerySet() {
-        posSet.clear();
+        nearPosSet.clear();
         int i = 0;
         while (!distanceQueue.isEmpty()) {
             ImageEntityCache.ImageWithDistance imageWithDistance = distanceQueue.poll();
             if (i++ < maxRenderObjCount) {
-                posSet.add(imageWithDistance.pos);
+                nearPosSet.add(imageWithDistance.pos);
             }
             if (i == maxRenderObjCount) {
                 farthestPos = imageWithDistance.pos;
@@ -134,8 +136,8 @@ public class RenderQueue {
         }
     }
 
-    public static boolean isInPosSet(BlockPos pos) {
-        return posSet.contains(pos.toLong());
+    public static boolean isRenderRange(BlockPos pos) {
+        return nearPosSet.contains(pos.toLong());
     }
 
     public static boolean isNearer(BlockPos pos, BlockPos viewer) {

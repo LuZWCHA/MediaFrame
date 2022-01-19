@@ -6,7 +6,7 @@ import top.nowandfuture.mod.imagesign.caches.IParam;
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.net.TrustAll;
-import top.nowandfuture.mod.imagesign.utils.OkHttpUtil;
+import top.nowandfuture.mod.imagesign.utils.DownloadUtil;
 import com.icafe4j.image.ImageIO;
 import com.icafe4j.image.ImageType;
 import com.icafe4j.image.reader.GIFReader;
@@ -18,10 +18,7 @@ import okhttp3.OkHttpClient;
 
 import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
@@ -30,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 public class ImageIOLoader implements ImageLoader {
     private OkHttpClient client;
-    private int retryTime = 3;
+    private static int RETRY_COUNT = 3;
 
 
     public ImageIOLoader() {
@@ -95,21 +92,20 @@ public class ImageIOLoader implements ImageLoader {
                 }
                 res = new ImageData(format, otherInfo, bufferedImages);
             }
-        } finally {
-
         }
         return res;
     }
 
     @Override
     public void save(ImageData image, Path path, String format) throws Exception {
-        // TODO: 2021/8/19
+        //do nothing
+        //we don't need to save the image as a file now, may be useful in the future.
     }
 
     @Override
     public File fetch(String url, File saveFile) throws Exception {
-//        URL url2 = URI.create(url).toURL();
-//        url2.openConnection(ProxyManager.INSTANCE.getProxy().getProxyIns());
+
+
 
         Files.deleteIfExists(saveFile.toPath());
 
@@ -121,9 +117,10 @@ public class ImageIOLoader implements ImageLoader {
         final long mills = 100;
         final long maxWait = 5 * 1000;
 
-        while (temp < retryTime) {
+        while (temp < RETRY_COUNT) {
             try {
-                boolean success = OkHttpUtil.downloadImage(client, url, saveFile);
+
+                boolean success = DownloadUtil.downloadImage(client, url, saveFile);
                 if (success) {
                     file = saveFile;
                     break;
@@ -136,7 +133,7 @@ public class ImageIOLoader implements ImageLoader {
             }
         }
 
-        if (temp >= retryTime) {
+        if (temp >= RETRY_COUNT) {
             if (last != null) {
                 throw last;
             }

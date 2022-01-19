@@ -28,7 +28,7 @@ import top.nowandfuture.mod.imagesign.RenderQueue;
 import top.nowandfuture.mod.imagesign.caches.GIFImagePlayManager;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
-import top.nowandfuture.mod.imagesign.loader.Vector3d;
+import top.nowandfuture.mod.imagesign.caches.Vector3d;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
 
 @OnlyIn(Dist.CLIENT)
@@ -56,7 +56,7 @@ public class ClientProxy extends CommonProxy {
     private static boolean lastShader;
     private static int lastCountReset = -1;
 
-    public static boolean getShaderLoaded() {
+    public static boolean isShaderLoaded() {
         return lastShader;
     }
 
@@ -78,12 +78,12 @@ public class ClientProxy extends CommonProxy {
                     if (count >= 0 && lastCountReset != count) {
                         lastCountReset = count;
 
-                        RenderSystem.recordRenderCall(new IRenderCall() {
-                            @Override
-                            public void execute() {
+                        // Update the image when shader first loaded or reloaded, but it has no effect by testing now.
+                        //I don't sure that if the shader will break the image render in the future, so the codes will be
+                        // always here.
+                        RenderSystem.recordRenderCall(() -> {
 //                                ImageLoadManager.INSTANCE.clear(entity.world);
 //                                ImageFetcher.INSTANCE.reload();
-                            }
                         });
 
                     }

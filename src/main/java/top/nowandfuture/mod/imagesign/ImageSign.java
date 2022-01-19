@@ -32,6 +32,8 @@ public class ImageSign {
 
     private static String PROXY_ADDRESS;
     private static Integer PROXY_PORT;
+    private static String TEMP_DIR = "image_temps";
+    private static String TEMP_DIR_2 = "image_temps2";
 
     private static IProxy proxy;
     public static final Logger LOGGER = LogManager.getLogger();
@@ -74,11 +76,11 @@ public class ImageSign {
         PROXY_PORT = Config.PROXY_PORT.get();
 
         RenderQueue.setMaxRenderObjCount(Config.MAX_IMAGE_RENDER_COUNT.get());
-        // TODO: 2021/8/24 socks proxy
+        // TODO: 2022/1/19 socks proxy next update will added.
         ProxyManager.INSTANCE.setProxy(new Proxy(PROXY_ADDRESS, PROXY_PORT, "",0,"",0));
         ImageFetcher.CacheSetting cacheSetting = new ImageFetcher.CacheSetting(
                 Config.MAX_CACHE_SIZE.get(), Config.MAX_IMAGES_MEMORY.get(), Config.MAX_IMAGE_SIZE.get(),
-                Minecraft.getInstance().gameDir.getAbsolutePath(), "image_temps","image_temps2"
+                Minecraft.getInstance().gameDir.getAbsolutePath(), TEMP_DIR, TEMP_DIR_2
         );
         ImageFetcher.INSTANCE.init(cacheSetting);
 

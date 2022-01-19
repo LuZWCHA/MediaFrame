@@ -2,8 +2,6 @@ package top.nowandfuture.mod.imagesign.mixin;
 
 import com.mojang.blaze3d.matrix.MatrixStack;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
-import it.unimi.dsi.fastutil.doubles.DoubleArrayList;
-import it.unimi.dsi.fastutil.doubles.DoubleList;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.StandingSignBlock;
 import net.minecraft.block.WallSignBlock;
@@ -17,6 +15,7 @@ import net.minecraft.client.renderer.tileentity.SignTileEntityRenderer;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
 import net.minecraft.tileentity.SignTileEntity;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.vector.Vector3f;
 import org.lwjgl.opengl.GL11;
 import org.spongepowered.asm.mixin.Mixin;
@@ -29,6 +28,8 @@ import top.nowandfuture.mod.imagesign.caches.*;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadTask;
+import top.nowandfuture.mod.imagesign.caches.Vector3i;
+import top.nowandfuture.mod.imagesign.utils.ParamsParser;
 import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 import top.nowandfuture.mod.imagesign.utils.Utils;
 
@@ -38,6 +39,9 @@ import top.nowandfuture.mod.imagesign.utils.Utils;
  */
 @Mixin(SignTileEntityRenderer.class)
 public abstract class MixinSignTileEntityRenderer {
+
+    private static final String HEADER = "[Image]";
+    private static final String LR_HEADER = "[ImageT]";
 
     private void renderImages(ImageEntity imageEntity, SignTileEntity tileEntityIn, double width, double height,
                               double offsetX, double offsetY, double offsetZ, float partialTicks, MatrixStack matrixStackIn,
@@ -133,7 +137,7 @@ public abstract class MixinSignTileEntityRenderer {
         matrixStackIn.pop();
     }
 
-    @Inject(method = "render",
+    @Inject(method = "render(Lnet/minecraft/tileentity/SignTileEntity;FLcom/mojang/blaze3d/matrix/MatrixStack;Lnet/minecraft/client/renderer/IRenderTypeBuffer;II)V",
             at = @At(
                     value = "HEAD"
             ),
@@ -145,9 +149,9 @@ public abstract class MixinSignTileEntityRenderer {
                 || Minecraft.getInstance().world == null)
             return;
 
-        String header = tileEntityIn.getText(0).getUnformattedComponentText();
-        boolean normalImage = "[Image]".equals(header);
-        boolean thuImage = "[ImageT]".equals(header);
+        final String header = tileEntityIn.getText(0).getUnformattedComponentText();
+        final boolean normalImage = HEADER.equals(header);
+        final boolean thuImage = LR_HEADER.equals(header);
         if (normalImage || thuImage) {
             ImageFetcher fetcher = ImageFetcher.INSTANCE;
 
@@ -157,10 +161,12 @@ public abstract class MixinSignTileEntityRenderer {
                 return;
             }
 
-            RenderQueue.addNextFrameRenderObj(null, tileEntityIn.getPos(), tileEntityIn.getPos().distanceSq(TileEntityRendererDispatcher.instance.renderInfo.getBlockPos()));
-            if (!RenderQueue.isInPosSet(tileEntityIn.getPos())) {
-                //Too many tiles to render, do not render this one.
-                //Or the one has not been added to the query set at the previous frame;
+            //Add a fake image entity to create it at next frames.
+            BlockPos pos = tileEntityIn.getPos();
+            RenderQueue.addNextFrameRenderObj(null, new Vector3i(pos.getX(), pos.getY(), pos.getZ()), tileEntityIn.getPos().distanceSq(TileEntityRendererDispatcher.instance.renderInfo.getBlockPos()));
+            if (!RenderQueue.isRenderRange(tileEntityIn.getPos())) {
+                //Too many tiles to render, do not render this one
+                //or the one has not been added to the query set at the previous frame;
                 //Render or upload texture next frame.
                 return;
             }
@@ -171,73 +177,25 @@ public abstract class MixinSignTileEntityRenderer {
                 if (imageEntity.getOrgImages().isEmpty())
                     return;
 
+                //The first image of the "Image"(gif has more than one image);
                 OpenGLImage entity = imageEntity.getOrgImages().get(0);
 
-                String pram = tileEntityIn.getText(2).getUnformattedComponentText();
-                String[] res = pram.split(",");
-                DoubleList pars = new DoubleArrayList();
-                String brightness = tileEntityIn.getText(3).getUnformattedComponentText();
-                int light = 0;
-                try {
-                    light = Integer.parseInt(brightness);
+                String[] lines = {
+                        header,
+                        url,
+                        tileEntityIn.getText(2).getUnformattedComponentText(),
+                        tileEntityIn.getText(3).getUnformattedComponentText()
+                };
 
-                } catch (NumberFormatException ignored) {
-
-                }
-                try {
-                    for (String re : res) {
-                        double data = Double.parseDouble(re);
-                        pars.add(data);
-                    }
-                } catch (NumberFormatException ignored) {
-
-                }
-
-                double width = 1, height = 1;
-                boolean doOffset = false;
-                double offsetX = 0D, offsetY = 0D, offsetZ = 0D;
-
-                if (pars.size() == 2) {
-                    if (pars.getDouble(0) > 0) {
-                        width = pars.getDouble(0);
-                    }
-
-                    if (pars.getDouble(1) > 0) {
-                        height = pars.getDouble(1);
-                    }
-                }
-
-                if (pars.size() == 3) {
-                    doOffset = true;
-                    offsetX = pars.getDouble(0);
-                    offsetY = pars.getDouble(1);
-                    offsetZ = pars.getDouble(2);
-                }
-
-                if (pars.size() == 5) {
-                    doOffset = true;
-                    if (pars.getDouble(0) > 0) {
-                        width = pars.getDouble(0);
-                    }
-
-                    if (pars.getDouble(1) > 0) {
-                        height = pars.getDouble(1);
-                    }
-                    offsetX = pars.getDouble(2);
-                    offsetY = pars.getDouble(3);
-                    offsetZ = pars.getDouble(4);
-                }
-
-                int[] lights = RenderHelper.decodeCombineLight(combinedLightIn);
-                combinedLightIn = RenderHelper.getCombineLight(lights[0], lights[1], light);
+                ParamsParser.Params params = ParamsParser.parse(lines, combinedLightIn);
 
                 int w = entity.getWidth();
                 int h = entity.getHeight();
-                float wd = w / (float) width;
-                float hd = h / (float) height;
+                float wd = w / (float) params.width;
+                float hd = h / (float) params.height;
                 float scale = Math.max(wd, hd);
 
-                if (imageEntity.isToUpdate()) {
+                if (imageEntity.isToUpdate()) {//The image is not upload to GPU (if GPU is valid).
                     imageEntity.uploadImage(thuImage, 16 / scale);
                     imageEntity.setToUpdate(false);
                 } else if (entity.isThumbnail() && entity.getScale() > 16 / scale && imageEntity.hasOpenGLSource()) {
@@ -246,8 +204,8 @@ public abstract class MixinSignTileEntityRenderer {
 
                 if (imageEntity.hasOpenGLSource()) {
                     //Do render
-                    renderImages(imageEntity, tileEntityIn, width, height, offsetX, offsetY, offsetZ,
-                            partialTicks, matrixStackIn, bufferIn, combinedLightIn, combinedOverlayIn, doOffset);
+                    renderImages(imageEntity, tileEntityIn, params.width, params.height, params.offsetX, params.offsetY, params.offsetZ,
+                            partialTicks, matrixStackIn, bufferIn, combinedLightIn, combinedOverlayIn, params.doOffset);
 
                     callbackInfo.cancel();
                 }

@@ -5,8 +5,8 @@
   ],
   "client": [
     "MixinEditSignScreen",
-    "MixinSignTileEntityRenderer",
-    "MixinSignTileEntity"
+    "MixinSignTileEntity",
+    "MixinSignTileEntityRenderer"
   ],
   "server": [],
   "minVersion": "0.8",

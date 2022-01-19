@@ -2,13 +2,16 @@ package top.nowandfuture.mod.imagesign.caches;
 
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
+
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.core.SingleObserver;
 import io.reactivex.rxjava3.schedulers.Schedulers;
+
 import net.minecraft.client.renderer.texture.Texture;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.resources.IResourceManager;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
@@ -114,6 +117,7 @@ public class OpenGLImage extends Texture {
                         if (image.getColorModel().hasAlpha()) {
                             channel = 4;
                         }
+
                         Raster raster = image.getRaster();
                         DataBuffer dataBuffer = raster.getDataBuffer();
                         byte[] data = null;
@@ -183,10 +187,10 @@ public class OpenGLImage extends Texture {
                     for (int i = 0; i < mipmapLevel; i++) {
                         //Send texel data to OpenGL
                         if (channel == 4) {
-                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, byteBuffer);
 //                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, byteBuffer);
                         } else if (channel == 3) {
-                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, (ByteBuffer) byteBuffer);
+                            GL11.glTexImage2D(GL_TEXTURE_2D, i, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
 //                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
                         }
                     }
@@ -216,7 +220,7 @@ public class OpenGLImage extends Texture {
             error = GL11.glGetError();
             if (error == GL_NO_ERROR) {
                 if (deleteMemory) {
-                    // TODO: 2021/8/20 remove the bufferedImage
+                    // not needed now, but left the codes to prepare the next version update.
                 }
                 return true;
             } else {

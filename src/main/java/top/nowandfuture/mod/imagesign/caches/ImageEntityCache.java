@@ -4,14 +4,12 @@ import io.netty.util.collection.LongObjectHashMap;
 import io.netty.util.collection.LongObjectMap;
 import it.unimi.dsi.fastutil.longs.LongList;
 import org.jetbrains.annotations.NotNull;
-import top.nowandfuture.mod.imagesign.loader.Vector3d;
+import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.SoftReference;
 import java.util.*;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import net.minecraft.util.math.BlockPos;
 
 
 public class ImageEntityCache {
@@ -42,7 +40,7 @@ public class ImageEntityCache {
         this.singleImageMaxSize = singleImageMaxSize;
     }
 
-    public synchronized void removeFromQuickQueryMap(BlockPos pos) {
+    public synchronized void removeFromQuickQueryMap(Vector3i pos) {
         posQueryMap.remove(pos.toLong());
     }
 
@@ -67,7 +65,7 @@ public class ImageEntityCache {
 
     private AtomicBoolean posDirty = new AtomicBoolean(true);
 
-    public void updateViewerPos(@NotNull top.nowandfuture.mod.imagesign.loader.Vector3d pos) {
+    public void updateViewerPos(@NotNull Vector3d pos) {
         if (!pos.equals(this.viewerPos)) {
             this.viewerPos = pos;
             this.posDirty.set(true);
@@ -79,12 +77,12 @@ public class ImageEntityCache {
     @Deprecated
     public double removeFarthestEntities(long memorySize, double addedDistance, int a) {
         LinkedList<ImageWithDistance> sortList = new LinkedList<>();
-        BlockPos bb = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
+        Vector3i bb = new Vector3i(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
 
         synchronized (this) {
             cacheMap.forEach((s, imageEntity) -> {
                 for (long po : imageEntity.posList) {
-                    BlockPos blockPos = BlockPos.fromLong(po);
+                    Vector3i blockPos = Vector3i.fromLong(po);
                     ImageWithDistance imageWithDistance = ImageWithDistance.create(imageEntity, blockPos, blockPos.distanceSq(bb));
                     sortList.add(imageWithDistance);
                 }
@@ -291,7 +289,6 @@ public class ImageEntityCache {
         return ImageEntity.EMPTY;
     }
 
-    // TODO: 2021/9/3 move the below codes to another class not relate to the Minecraft
     //If the cache is full, we will add the image to the cache by the distance to viewer.
     //The images may be clean up by GC, so the sort result will not be so stable.
     //The images may load and unload alternatively.
@@ -299,8 +296,8 @@ public class ImageEntityCache {
 
     private void delayAdd(ImageEntity imageEntity) {
         synchronized (waitAddList) {
-            BlockPos blockPos = BlockPos.fromLong(imageEntity.getFirstID());
-            double distance = blockPos.distanceSq(new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ()));
+            Vector3i blockPos = Vector3i.fromLong(imageEntity.getFirstID());
+            double distance = blockPos.distanceSq(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
             waitAddList.add(new SoftReference<>(ImageWithDistance.create(imageEntity, blockPos, distance)));
         }
     }
@@ -308,7 +305,7 @@ public class ImageEntityCache {
     public void tryProcessWaitQueue() {
         if (!waitAddList.isEmpty()) {
             List<ImageWithDistance> imageWithDistanceList = new LinkedList<>();
-            BlockPos viewer = new BlockPos(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
+            Vector3i viewer = new Vector3i(viewerPos.getX(), viewerPos.getY(), viewerPos.getZ());
             //Try to sort the image entity by distance.
             synchronized (waitAddList) {
                 for (SoftReference<ImageWithDistance> softReference : waitAddList) {
@@ -324,7 +321,7 @@ public class ImageEntityCache {
             for (ImageEntity entity : cacheMap.values()) {
                 if (entity != null) {
                     for (long l : entity.posList) {
-                        BlockPos blockPos = BlockPos.fromLong(l);
+                        Vector3i blockPos = Vector3i.fromLong(l);
                         imageWithDistanceList.add(ImageWithDistance.create(entity, blockPos, blockPos.distanceSq(viewer)));
                     }
                 }
@@ -446,13 +443,13 @@ public class ImageEntityCache {
 
         }
 
-        private ImageWithDistance(ImageEntity imageEntity, double distance, BlockPos pos) {
+        private ImageWithDistance(@Nullable ImageEntity imageEntity, double distance, Vector3i pos) {
             this.imageEntity = imageEntity;
             this.distance = distance;
             this.pos = pos.toLong();
         }
 
-        public void set(ImageEntity imageEntity, BlockPos pos, double distance) {
+        public void set(@Nullable ImageEntity imageEntity, Vector3i pos, double distance) {
             this.imageEntity = imageEntity;
             this.pos = pos.toLong();
             this.distance = distance;
@@ -491,7 +488,7 @@ public class ImageEntityCache {
             return POOL.get().get();
         }
 
-        public static ImageWithDistance create(ImageEntity imageEntity, BlockPos pos, double distance) {
+        public static ImageWithDistance create(@Nullable ImageEntity imageEntity, Vector3i pos, double distance) {
             ImageWithDistance imageWithDistance = POOL.get().get();
             imageWithDistance.set(imageEntity, pos, distance);
             return imageWithDistance;

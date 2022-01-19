@@ -9,7 +9,9 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-//This scheduler is for RxJava, to run the task in the lastworldrender event
+/**
+ * This scheduler is for RxJava, to run the task in the LastWorldRender event
+ */
 public class MyWorldRenderScheduler extends Scheduler{
 
     private static final MyWorldRenderScheduler INSTANCE = new MyWorldRenderScheduler();
@@ -129,6 +131,7 @@ public class MyWorldRenderScheduler extends Scheduler{
             } else {
                 tail.compareAndSet(tailPivot, queuedRunnable); // can only fail with a concurrent dispose and we don't want to override the disposed value
                 if (tailPivot == head) {
+                    //Add to the RenderQueue which will put the task to LastRenderEvent in Minecraft background thread.
                     RenderQueue.tryAddTask(this);
                 }
             }

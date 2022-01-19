@@ -4,6 +4,9 @@ import org.apache.logging.log4j.util.Strings;
 
 import java.net.InetSocketAddress;
 
+/**
+ * The Proxy class is a wrapper for network proxy in jdk.
+ */
 public class Proxy {
     private String httpProxy;
     private int httpPort;

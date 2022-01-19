@@ -107,8 +107,8 @@ public class ImageEntity {
         this.imageInfo = imageInfo;
     }
 
-    int updateFailCount = 0;
-    static int MAX_FAILED_COUNT = 3;
+    private int updateFailCount = 0;
+    private static int MAX_FAILED_COUNT = 3;
 
     public void uploadImage() {
         uploadImage(false, 1);

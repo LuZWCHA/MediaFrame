@@ -14,7 +14,7 @@ public class TrustAll {
             sc.init(null, new TrustManager[]{new trustManager()}, new SecureRandom());
 
             ssfFactory = sc.getSocketFactory();
-        } catch (Exception e) {
+        } catch (Exception ignored) {
         }
 
         return ssfFactory;
@@ -29,12 +29,11 @@ public class TrustAll {
 
     public static class trustManager implements X509TrustManager, TrustManager {
         @Override
-        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+        public void checkServerTrusted(X509Certificate[] chain, String authType) {
         }
 
         @Override
-        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) throws CertificateException {
-
+        public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
         }
 
         @Override

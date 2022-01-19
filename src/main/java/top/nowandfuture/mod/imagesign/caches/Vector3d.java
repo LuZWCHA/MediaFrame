@@ -1,4 +1,4 @@
-package top.nowandfuture.mod.imagesign.loader;
+package top.nowandfuture.mod.imagesign.caches;
 
 public class Vector3d {
     private double x, y, z;
@@ -31,5 +31,17 @@ public class Vector3d {
 
     public void setZ(double z) {
         this.z = z;
+    }
+
+    public double distanceSq(Vector3d v){
+        return this.distanceSq(v.x, v.y, v.z, true);
+    }
+
+    public double distanceSq(double x, double y, double z, boolean useCenter) {
+        double d0 = useCenter ? 0.5D : 0.0D;
+        double d1 = this.getX() + d0 - x;
+        double d2 = this.getY() + d0 - y;
+        double d3 = this.getZ() + d0 - z;
+        return d1 * d1 + d2 * d2 + d3 * d3;
     }
 }

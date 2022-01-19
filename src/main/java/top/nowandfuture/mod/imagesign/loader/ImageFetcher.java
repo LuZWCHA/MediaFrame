@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
+import top.nowandfuture.mod.imagesign.caches.Vector3d;
 import top.nowandfuture.mod.imagesign.utils.Utils;
 
 import java.io.File;
@@ -82,12 +83,7 @@ public enum ImageFetcher {
             cache.dispose();
             blackUrls.clear();
         } else {
-            RenderSystem.recordRenderCall(new IRenderCall() {
-                @Override
-                public void execute() {
-                    dispose();
-                }
-            });
+            RenderSystem.recordRenderCall(this::dispose);
         }
 
     }
@@ -126,7 +122,7 @@ public enum ImageFetcher {
     }
 
     public @NonNull Observable<ImageEntity> get(String url, long blockPos, Scheduler curSch) {
-        //fetch from cache
+        //Fetch from cache
         return Observable.concat(this.load(url, blockPos), this.fetch(url, blockPos))
                 .first(ImageEntity.EMPTY)
                 .observeOn(curSch)
