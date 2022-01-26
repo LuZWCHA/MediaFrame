@@ -18,6 +18,7 @@ public class Config {
     public static final ForgeConfigSpec.ConfigValue<Long> MAX_IMAGES_MEMORY;
     public static final ForgeConfigSpec.ConfigValue<Long> MAX_IMAGE_SIZE;
     public static final ForgeConfigSpec.ConfigValue<Integer> MAX_IMAGE_RENDER_COUNT;
+    public static final ForgeConfigSpec.ConfigValue<Long> CALL_TIMEOUT;
 
     public static ForgeConfigSpec SERVER_CONFIG;
     public static ForgeConfigSpec CLIENT_CONFIG;
@@ -57,6 +58,7 @@ public class Config {
         MAX_IMAGES_MEMORY = CLIENT_BUILDER.comment("Images max memory limit (byte).").defineInRange("image_memory_limit", 200L << 20, 1 << 10, Long.MAX_VALUE);
         MAX_IMAGE_SIZE = CLIENT_BUILDER.comment("Image max size (byte).").defineInRange("image_size", 6L << 20, 1 << 10, Long.MAX_VALUE);
         MAX_IMAGE_RENDER_COUNT = CLIENT_BUILDER.comment("Max image count that will be render at one frame.").defineInRange("max_render_count", 50, 1, Integer.MAX_VALUE);
+        CALL_TIMEOUT = CLIENT_BUILDER.comment("Request total timeout limit (millisecond). Recommend: more than 1000ms on the internet.").define("call_timeout", 2000L);
 
         CLIENT_BUILDER.pop();
 

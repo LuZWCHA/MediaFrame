@@ -1,6 +1,7 @@
 package top.nowandfuture.mod.imagesign.loader;
 
 import com.icafe4j.image.gif.GIFFrame;
+import top.nowandfuture.mod.imagesign.Config;
 import top.nowandfuture.mod.imagesign.caches.GIFParam;
 import top.nowandfuture.mod.imagesign.caches.IParam;
 import top.nowandfuture.mod.imagesign.net.Proxy;
@@ -28,13 +29,16 @@ import java.util.concurrent.TimeUnit;
 public class ImageIOLoader implements ImageLoader {
     private OkHttpClient client;
     private static int RETRY_COUNT = 3;
+    private static long CALL_TIME_OUT = 2000;
 
+    public static void setCallTimeOut(long callTimeOut) {
+        CALL_TIME_OUT = callTimeOut;
+    }
 
     public ImageIOLoader() {
         OkHttpClient.Builder builder = new OkHttpClient.Builder();
         client = builder
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
-                .callTimeout(500, TimeUnit.MILLISECONDS)
+                .callTimeout(CALL_TIME_OUT, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
                         new TrustAll.trustManager())
                 .proxy(ProxyManager.INSTANCE.getProxy().getProxyIns())
@@ -43,7 +47,7 @@ public class ImageIOLoader implements ImageLoader {
 
     public void setProxy(Proxy proxy) {
         client = client.newBuilder()
-                .connectTimeout(500, TimeUnit.MILLISECONDS)
+                .connectTimeout(CALL_TIME_OUT, TimeUnit.MILLISECONDS)
                 .sslSocketFactory(TrustAll.socketFactory(),
                         new TrustAll.trustManager())
                 .proxy(proxy.getProxyIns())
@@ -104,8 +108,6 @@ public class ImageIOLoader implements ImageLoader {
 
     @Override
     public File fetch(String url, File saveFile) throws Exception {
-
-
 
         Files.deleteIfExists(saveFile.toPath());
 

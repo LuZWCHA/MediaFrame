@@ -136,7 +136,7 @@ public class RenderQueue {
         }
     }
 
-    public static boolean isRenderRange(BlockPos pos) {
+    public static boolean isInRenderRange(BlockPos pos) {
         return nearPosSet.contains(pos.toLong());
     }
 

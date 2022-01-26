@@ -19,6 +19,7 @@ import org.apache.logging.log4j.Logger;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
+import top.nowandfuture.mod.imagesign.loader.ImageIOLoader;
 import top.nowandfuture.mod.imagesign.net.Proxy;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.setup.ClientProxy;
@@ -74,6 +75,9 @@ public class ImageSign {
     public void loadConfig(){
         PROXY_ADDRESS = Config.PROXY_ADDRESS.get();
         PROXY_PORT = Config.PROXY_PORT.get();
+        long CALL_TIMEOUT = Config.CALL_TIMEOUT.get();
+
+        ImageIOLoader.setCallTimeOut(CALL_TIMEOUT);
 
         RenderQueue.setMaxRenderObjCount(Config.MAX_IMAGE_RENDER_COUNT.get());
         // TODO: 2022/1/19 socks proxy next update will added.

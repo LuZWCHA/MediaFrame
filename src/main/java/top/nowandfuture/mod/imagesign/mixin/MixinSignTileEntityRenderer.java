@@ -164,7 +164,7 @@ public abstract class MixinSignTileEntityRenderer {
             //Add a fake image entity to create it at next frames.
             BlockPos pos = tileEntityIn.getPos();
             RenderQueue.addNextFrameRenderObj(null, new Vector3i(pos.getX(), pos.getY(), pos.getZ()), tileEntityIn.getPos().distanceSq(TileEntityRendererDispatcher.instance.renderInfo.getBlockPos()));
-            if (!RenderQueue.isRenderRange(tileEntityIn.getPos())) {
+            if (!RenderQueue.isInRenderRange(tileEntityIn.getPos())) {
                 //Too many tiles to render, do not render this one
                 //or the one has not been added to the query set at the previous frame;
                 //Render or upload texture next frame.
