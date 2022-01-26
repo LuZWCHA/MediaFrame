@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
+import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.ObservableOnSubscribe;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -195,17 +196,23 @@ public enum ImageFetcher {
 
     private Observable<ImageEntity> fetch(String url, long blockPos) {
         return Observable.create((ObservableOnSubscribe<ImageEntity>) e -> {
-            final String name = encodeUrl(url);
+            final String name = ImageFetcher.this.encodeUrl(url);
             final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
             final File parentDir = diskPath.toFile().getParentFile();
             if (!parentDir.exists()) {
                 Files.createDirectories(parentDir.toPath());
             }
             LOGGER.info("Downloading image: {}", url);
-            final File file = loader.fetch(url, diskPath.toFile());
+            File file = null;
+            try {
+                file = loader.fetch(url, diskPath.toFile());
+            }catch (Exception exception){
+                e.tryOnError(exception);
+            }
+
             if (file != null) {
                 LOGGER.info("Loading image: {}", url);
-                ImageLoader.ImageData data = loadFromDisk(diskPath);
+                ImageLoader.ImageData data = ImageFetcher.this.loadFromDisk(diskPath);
                 if (data != null) {
                     final ImageEntity entity = ImageEntity.create(url, blockPos, data);
                     entity.setImageInfo(data.getImageInfo());
