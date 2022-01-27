@@ -1,7 +1,9 @@
 package top.nowandfuture.mod.imagesign.setup;
 
+import com.ibm.icu.impl.Pair;
 import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
+import io.reactivex.rxjava3.disposables.Disposable;
 import net.minecraft.block.AbstractSignBlock;
 import net.minecraft.client.ClipboardHelper;
 import net.minecraft.client.Minecraft;
@@ -30,6 +32,8 @@ import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
 import top.nowandfuture.mod.imagesign.caches.Vector3d;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
+
+import java.util.function.BiConsumer;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientProxy extends CommonProxy {
@@ -127,7 +131,13 @@ public class ClientProxy extends CommonProxy {
                     if (refresh)
                         ImageFetcher.INSTANCE.refreshSmooth(blockPos.toLong());
                     else {
-                        ImageLoadManager.INSTANCE.clear(world);
+                        ImageLoadManager.INSTANCE.clear(
+                                (entityPos, disposableStringPair) -> {
+                                    if (world.getTileEntity(BlockPos.fromLong(entityPos)) != null) {
+                                        disposableStringPair.first.dispose();
+                                    }
+                                }
+                        );
                         ImageFetcher.INSTANCE.refresh(blockPos.toLong());
                     }
                 }
@@ -138,7 +148,12 @@ public class ClientProxy extends CommonProxy {
     @SubscribeEvent
     public void onWorldUnload(WorldEvent.Unload event) {
         if (event.getWorld().isRemote()) {
-            ImageLoadManager.INSTANCE.clear(event.getWorld());
+            ImageLoadManager.INSTANCE.clear(
+                    (entityPos, disposableStringPair) -> {
+                        if (event.getWorld().getTileEntity(BlockPos.fromLong(entityPos)) != null) {
+                            disposableStringPair.first.dispose();
+                        }
+                    });
             ImageFetcher.INSTANCE.dispose();
             RenderQueue.clearQueue();
             GIFImagePlayManager.INSTANCE.clear();

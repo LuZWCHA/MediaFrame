@@ -6,11 +6,10 @@ import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.disposables.Disposable;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongSet;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.IWorld;
 
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 
 //Thread Safe
 public enum ImageLoadManager {
@@ -60,13 +59,9 @@ public enum ImageLoadManager {
         return false;
     }
 
-    public void clear(IWorld world) {
+    public void clear(BiConsumer<Long, Pair<Disposable, String>> disposeConsumer) {
         synchronized (this) {
-            loadingMap.forEach((entityPos, pair) -> {
-                if (world != null && world.getTileEntity(BlockPos.fromLong(entityPos)) != null) {
-                    pair.first.dispose();
-                }
-            });
+            loadingMap.forEach(disposeConsumer);
 
             loadingMap.clear();
             posRecord.clear();
@@ -75,7 +70,7 @@ public enum ImageLoadManager {
     }
 
     public synchronized void addToLoad(@NonNull ImageLoadTask task){
-        long pos = task.getPos();
+        long pos = task.getIdentifier();
         String url = task.getUrl();
         if(!posRecord.contains(pos) && !isLoading(url)) {
             toLoadQueue.add(task);
@@ -87,8 +82,8 @@ public enum ImageLoadManager {
     public synchronized void runLoadTasks(){
         while (!toLoadQueue.isEmpty()){
             ImageLoadTask loadTask = toLoadQueue.poll();
-            BlockPos blockPos = BlockPos.fromLong(loadTask.getPos());
-            posRecord.remove(blockPos.toLong());
+            long blockPos = loadTask.getIdentifier();
+            posRecord.remove(blockPos);
             if(!isLoading(loadTask.getUrl())
                     && loadingMap.size() < MAX_LOAD_COUNT) {
                 loadTask.run();

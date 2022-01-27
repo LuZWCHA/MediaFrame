@@ -122,7 +122,27 @@ public class ImageIOLoader implements ImageLoader {
         while (temp < RETRY_COUNT) {
             try {
 
-                boolean success = DownloadUtil.downloadImage(client, url, saveFile);
+                boolean success = DownloadUtil.downloadImage(client, url, saveFile, new DownloadUtil.DownloadListener(){
+                    @Override
+                    public void onStart(String url) {
+                        super.onStart(url);
+                    }
+
+                    @Override
+                    public void onProgress(long p, long total) {
+                        super.onProgress(p, total);
+                    }
+
+                    @Override
+                    public void onFailed(Throwable t, String url) {
+                        super.onFailed(t, url);
+                    }
+
+                    @Override
+                    public void onSuccess(String url) {
+                        super.onSuccess(url);
+                    }
+                });
                 if (success) {
                     file = saveFile;
                     break;

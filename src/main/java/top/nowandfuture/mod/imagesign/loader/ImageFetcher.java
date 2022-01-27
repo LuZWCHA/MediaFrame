@@ -1,10 +1,8 @@
 package top.nowandfuture.mod.imagesign.loader;
 
-import com.mojang.blaze3d.systems.IRenderCall;
 import com.mojang.blaze3d.systems.RenderSystem;
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
-import io.reactivex.rxjava3.core.ObservableEmitter;
 import io.reactivex.rxjava3.core.ObservableOnSubscribe;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.schedulers.Schedulers;
@@ -110,6 +108,10 @@ public enum ImageFetcher {
         blackUrls.remove(url);
     }
 
+    public ImageLoadTask createImageLoadTask(String url, long blockPos){
+        return new MinecraftSignLoadTask(blockPos, url);
+    }
+
     public void reloadImageSmooth(String url, long blockPos) {
         if (cache.contain(url)) {
             try {
@@ -117,7 +119,7 @@ public enum ImageFetcher {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            ImageLoadTask loadTask = new ImageLoadTask.SignImageLoadTask(blockPos, url);
+            ImageLoadTask loadTask = createImageLoadTask(url, blockPos);
             ImageLoadManager.INSTANCE.addToLoad(loadTask);
         }
     }
@@ -161,6 +163,7 @@ public enum ImageFetcher {
             final String name = encodeUrl(url);
             final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
             LOGGER.info("Loading image: {}", url);
+
             final ImageLoader.ImageData data = loadFromDisk(diskPath);
             if (data != null) {
                 final ImageEntity entity = ImageEntity.create(url, blockPos, data);

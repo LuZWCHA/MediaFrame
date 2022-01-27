@@ -29,6 +29,7 @@ import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadTask;
 import top.nowandfuture.mod.imagesign.caches.Vector3i;
+import top.nowandfuture.mod.imagesign.loader.MinecraftSignLoadTask;
 import top.nowandfuture.mod.imagesign.utils.ParamsParser;
 import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 import top.nowandfuture.mod.imagesign.utils.Utils;
@@ -137,6 +138,10 @@ public abstract class MixinSignTileEntityRenderer {
         matrixStackIn.pop();
     }
 
+    private void renderInfo(){
+
+    }
+
     @Inject(method = "render(Lnet/minecraft/tileentity/SignTileEntity;FLcom/mojang/blaze3d/matrix/MatrixStack;Lnet/minecraft/client/renderer/IRenderTypeBuffer;II)V",
             at = @At(
                     value = "HEAD"
@@ -198,7 +203,7 @@ public abstract class MixinSignTileEntityRenderer {
                 if (imageEntity.isToUpdate()) {//The image is not upload to GPU (if GPU is valid).
                     imageEntity.uploadImage(thuImage, 16 / scale);
                     imageEntity.setToUpdate(false);
-                } else if (entity.isThumbnail() && entity.getScale() > 16 / scale && imageEntity.hasOpenGLSource()) {
+                } else if (entity.isThumbnail() && entity.getScale() > 16 / scale && imageEntity.hasOpenGLSource()) { //If the image is rendered as normal image but this image will render a low resolution one, then, re-upload a lr-image.
                     imageEntity.uploadImage(thuImage, 16 / scale);
                 }
 
@@ -209,9 +214,11 @@ public abstract class MixinSignTileEntityRenderer {
 
                     callbackInfo.cancel();
                 }
+
+
             } else {
                 ImageLoadManager.INSTANCE.addToLoad(
-                        new ImageLoadTask.SignImageLoadTask(tileEntityIn.getPos().toLong(), url)
+                        fetcher.createImageLoadTask(url, tileEntityIn.getPos().toLong())
                 );
             }
 
