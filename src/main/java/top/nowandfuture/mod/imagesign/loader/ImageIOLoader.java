@@ -1,7 +1,8 @@
 package top.nowandfuture.mod.imagesign.loader;
 
 import com.icafe4j.image.gif.GIFFrame;
-import top.nowandfuture.mod.imagesign.Config;
+import io.reactivex.rxjava3.annotations.NonNull;
+import org.jetbrains.annotations.NotNull;
 import top.nowandfuture.mod.imagesign.caches.GIFParam;
 import top.nowandfuture.mod.imagesign.caches.IParam;
 import top.nowandfuture.mod.imagesign.net.Proxy;
@@ -107,7 +108,7 @@ public class ImageIOLoader implements ImageLoader {
     }
 
     @Override
-    public File fetch(String url, File saveFile) throws Exception {
+    public File fetch(String url, File saveFile,@NotNull DownloadUtil.IDownloadListener downloadListener) throws Exception {
 
         Files.deleteIfExists(saveFile.toPath());
 
@@ -122,27 +123,7 @@ public class ImageIOLoader implements ImageLoader {
         while (temp < RETRY_COUNT) {
             try {
 
-                boolean success = DownloadUtil.downloadImage(client, url, saveFile, new DownloadUtil.DownloadListener(){
-                    @Override
-                    public void onStart(String url) {
-                        super.onStart(url);
-                    }
-
-                    @Override
-                    public void onProgress(long p, long total) {
-                        super.onProgress(p, total);
-                    }
-
-                    @Override
-                    public void onFailed(Throwable t, String url) {
-                        super.onFailed(t, url);
-                    }
-
-                    @Override
-                    public void onSuccess(String url) {
-                        super.onSuccess(url);
-                    }
-                });
+                boolean success = DownloadUtil.downloadImage(client, url, saveFile, downloadListener);
                 if (success) {
                     file = saveFile;
                     break;

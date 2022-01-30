@@ -11,6 +11,7 @@ import org.apache.logging.log4j.Logger;
 import top.nowandfuture.mod.imagesign.caches.ImageEntity;
 import top.nowandfuture.mod.imagesign.caches.ImageEntityCache;
 import top.nowandfuture.mod.imagesign.caches.Vector3d;
+import top.nowandfuture.mod.imagesign.utils.DownloadUtil;
 import top.nowandfuture.mod.imagesign.utils.Utils;
 
 import java.io.File;
@@ -19,7 +20,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * Image Fetcher will get the image from caches in order: Memory -> Disk -> Network.
@@ -33,6 +37,9 @@ public enum ImageFetcher {
     private ImageEntityCache cache;
 
     private ImageLoader loader;
+
+    private List<Consumer<IEvent>> stageListener;
+
     private final Logger LOGGER;
 
     private final Set<String> blackUrls;
@@ -43,10 +50,12 @@ public enum ImageFetcher {
         //default image loader
         this.loader = new ImageIOLoader();
         this.blackUrls = new HashSet<>();
+        this.stageListener = new LinkedList<>();
     }
 
     public synchronized void init(@NonNull ImageFetcher.CacheSetting config) {
         this.config = config;
+
         if (this.cache == null) {
             this.cache = new ImageEntityCache(config.cacheMaxSize, config.imageMaxSize, config.cacheMemoryLimit);
             isInit = true;
@@ -133,8 +142,10 @@ public enum ImageFetcher {
                 .doOnError(throwable -> {
                     if (throwable instanceof OutOfMemoryError) {
                         LOGGER.warn("Check the config to increase the memory:)");
+                        sendEvent(new FetchInfo(Stage.FAILED, blockPos, "Check the config to increase the memory:)"));
                     } else {
                         LOGGER.info("Observer stream: ", throwable);
+                        sendEvent(new FetchInfo(Stage.FAILED, blockPos, throwable.getMessage()));
                     }
                 });
     }
@@ -163,6 +174,7 @@ public enum ImageFetcher {
             final String name = encodeUrl(url);
             final Path diskPath = Paths.get(config.defaultDiskSavePath, config.orgImageSaveDir, name);
             LOGGER.info("Loading image: {}", url);
+            sendEvent(new FetchInfo(Stage.LOADING, blockPos, url));
 
             final ImageLoader.ImageData data = loadFromDisk(diskPath);
             if (data != null) {
@@ -171,6 +183,7 @@ public enum ImageFetcher {
 
                 entity.setImageInfo(data.getImageInfo());
                 LOGGER.info("Caching image: {}", url);
+                sendEvent(new FetchInfo(Stage.CACHING, blockPos, url));
 
                 long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
                 long imageSize = entity.imageInfo.getSize();
@@ -206,20 +219,29 @@ public enum ImageFetcher {
                 Files.createDirectories(parentDir.toPath());
             }
             LOGGER.info("Downloading image: {}", url);
+            sendEvent(new FetchInfo(Stage.DOWNLOADING, blockPos, url));
             File file = null;
             try {
-                file = loader.fetch(url, diskPath.toFile());
+                file = loader.fetch(url, diskPath.toFile(), new DownloadUtil.DownloadListener(){
+                    @Override
+                    public void onProgress(long p, long total) {
+                        // TODO: 2022/1/30
+                        super.onProgress(p, total);
+                    }
+                });
             }catch (Exception exception){
                 e.tryOnError(exception);
             }
 
             if (file != null) {
                 LOGGER.info("Loading image: {}", url);
+                sendEvent(new FetchInfo(Stage.LOADING, blockPos, url));
                 ImageLoader.ImageData data = ImageFetcher.this.loadFromDisk(diskPath);
                 if (data != null) {
                     final ImageEntity entity = ImageEntity.create(url, blockPos, data);
                     entity.setImageInfo(data.getImageInfo());
                     LOGGER.info("Caching image: {}", url);
+                    sendEvent(new FetchInfo(Stage.CACHING, blockPos, url));
                     long sizeLimit = ImageFetcher.INSTANCE.getCache().getSingleImageMaxSize();
                     long imageSize = entity.imageInfo.getSize();
                     if (imageSize > sizeLimit) {
@@ -270,6 +292,25 @@ public enum ImageFetcher {
             return "scr0" + Utils.md5(url);
         }
         return "scr1" + encoded;
+    }
+
+    public void sendEvent(FetchInfo fetchInfo){
+        for(Consumer<IEvent> iEventConsumer: stageListener){
+            iEventConsumer.accept(fetchInfo);
+        }
+    }
+
+    public void addListener(Consumer<IEvent> eventConsumer){
+        stageListener.add(eventConsumer);
+    }
+
+    public Consumer<IEvent> removeListener(Consumer<IEvent> eventConsumer){
+        stageListener.remove(eventConsumer);
+        return eventConsumer;
+    }
+
+    public void clearListeners(){
+        stageListener.clear();
     }
 
     public void setConfig(CacheSetting config) {

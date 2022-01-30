@@ -1,8 +1,5 @@
 package top.nowandfuture.mod.imagesign.loader;
 
-//import net.minecraft.client.Minecraft;
-//import net.minecraft.entity.Entity;
-//import net.minecraft.util.math.BlockPos;
 import top.nowandfuture.mod.imagesign.schedulers.OpenGLScheduler;
 
 import java.util.function.Supplier;
@@ -27,7 +24,9 @@ public abstract class ImageLoadTask implements Runnable, Comparable<ImageLoadTas
                     })
                     .subscribe(
                             imageEntity1 -> {
-
+                                ImageFetcher.INSTANCE.sendEvent(
+                                        new FetchInfo(Stage.UPLOADING, posLong, url)
+                                );
                             }, throwable -> {
                                 loadManager.removeFromLoadingList(posLong);
                                 //The url or the image is loaded successful because of the limit by the memory,

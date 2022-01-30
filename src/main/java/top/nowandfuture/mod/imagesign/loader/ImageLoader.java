@@ -1,8 +1,11 @@
 package top.nowandfuture.mod.imagesign.loader;
 
 import jdk.nashorn.internal.ir.debug.ObjectSizeCalculator;
+import org.jetbrains.annotations.NotNull;
 import top.nowandfuture.mod.imagesign.caches.IParam;
+import top.nowandfuture.mod.imagesign.utils.DownloadUtil;
 
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -13,7 +16,7 @@ public interface ImageLoader {
 
     ImageData load(Path path) throws Exception;
     void save(ImageData image, Path path, String format) throws Exception;
-    File fetch(String url, File saveFile) throws Exception;
+    File fetch(String url, File saveFile,@NotNull DownloadUtil.IDownloadListener downloadListener) throws Exception;
 
     class ImageInfo{
         private final String imageFormat;

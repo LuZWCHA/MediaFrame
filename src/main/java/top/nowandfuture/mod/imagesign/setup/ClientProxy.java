@@ -28,12 +28,12 @@ import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import top.nowandfuture.mod.imagesign.ImageSign;
 import top.nowandfuture.mod.imagesign.RenderQueue;
 import top.nowandfuture.mod.imagesign.caches.GIFImagePlayManager;
-import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
-import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
+import top.nowandfuture.mod.imagesign.loader.*;
 import top.nowandfuture.mod.imagesign.caches.Vector3d;
 import top.nowandfuture.mod.imagesign.utils.OptiFineHelper;
 
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientProxy extends CommonProxy {
@@ -105,6 +105,7 @@ public class ClientProxy extends CommonProxy {
         BlockPos blockPos = rightClickBlock.getPos();
         boolean refresh = rightClickBlock.getItemStack().isEmpty();
         boolean shiftDown = Screen.hasShiftDown();
+        ImageFetcher fetcher = ImageFetcher.INSTANCE;
         if (world.isRemote() && world.getBlockState(blockPos).getBlock() instanceof AbstractSignBlock) {
             boolean hasTe = world.getBlockState(blockPos).hasTileEntity();
             if (hasTe) {
@@ -128,9 +129,9 @@ public class ClientProxy extends CommonProxy {
                         }
                     }
                 } else {
-                    if (refresh)
-                        ImageFetcher.INSTANCE.refreshSmooth(blockPos.toLong());
-                    else {
+                    if (refresh) {
+                        fetcher.refreshSmooth(blockPos.toLong());
+                    } else {
                         ImageLoadManager.INSTANCE.clear(
                                 (entityPos, disposableStringPair) -> {
                                     if (world.getTileEntity(BlockPos.fromLong(entityPos)) != null) {
@@ -138,7 +139,7 @@ public class ClientProxy extends CommonProxy {
                                     }
                                 }
                         );
-                        ImageFetcher.INSTANCE.refresh(blockPos.toLong());
+                        fetcher.refresh(blockPos.toLong());
                     }
                 }
             }
@@ -162,6 +163,19 @@ public class ClientProxy extends CommonProxy {
 
     @Override
     public void doClientStuff(FMLClientSetupEvent event) {
+        ImageFetcher.INSTANCE.addListener(iEvent -> {
+            if (iEvent instanceof FetchInfo) {
+                FetchInfo info = (FetchInfo) iEvent;
+                if (info.object instanceof Long) {
+                    BlockPos pos = BlockPos.fromLong((Long) info.object);
+                    TileEntity tileEntity = event.getMinecraftSupplier().get().world.getTileEntity(pos);
 
+                    if (tileEntity instanceof ISignBlockEntityAccessor) {
+                        ISignBlockEntityAccessor entityAccessor = (ISignBlockEntityAccessor) (tileEntity);
+                        entityAccessor.setStage(info.stage);
+                    }
+                }
+            }
+        });
     }
 }

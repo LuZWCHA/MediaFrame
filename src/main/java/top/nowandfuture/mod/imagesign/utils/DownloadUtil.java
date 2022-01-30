@@ -4,6 +4,8 @@ import okhttp3.Call;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
+import org.apache.http.client.methods.RequestBuilder;
+import top.nowandfuture.mod.imagesign.Config;
 import top.nowandfuture.mod.imagesign.net.ProxyManager;
 
 import javax.annotation.Nullable;
@@ -50,16 +52,27 @@ public class DownloadUtil {
         }
     }
 
+    private static String CUSTOM_USER_AGENT = null;
+
     public static boolean downloadImage(OkHttpClient okHttpClient, String url, File file, @Nullable IDownloadListener downloadListener) throws Exception {
 
         if (downloadListener == null) {
             downloadListener = new DownloadListener();
         }
 
+        if (CUSTOM_USER_AGENT == null) {
+            CUSTOM_USER_AGENT = Config.HEADER_USER_AGENT.get();
+        }
+
         if (url.startsWith("file://")) return downloadImage(url, file, downloadListener);
 
-        Request request = new Request.Builder().url(url).build();
-        Call call = okHttpClient.newCall(request);
+        Request.Builder requestBuilder = new Request.Builder().url(url);
+
+        if(!CUSTOM_USER_AGENT.isEmpty()){
+            requestBuilder.addHeader("User-Agent", CUSTOM_USER_AGENT);
+        }
+
+        Call call = okHttpClient.newCall(requestBuilder.build());
 
         downloadListener.onStart(url);
 
@@ -77,16 +90,15 @@ public class DownloadUtil {
                     downloadListener.onProgress(p, total);
                 }
             } else {
-                downloadListener.onFailed(new RuntimeException(response.code() + ": " + response.message() ), url);
-                return false;
+                throw new RuntimeException(response.code() + ": " + response.message());
             }
         } catch (Exception e) {
+            file.delete();
             downloadListener.onFailed(e, url);
             return false;
         }
         downloadListener.onSuccess(url);
         return true;
-
     }
 
     public static boolean downloadImage(String url, File file, @Nullable IDownloadListener downloadListener) throws Exception {
@@ -115,6 +127,7 @@ public class DownloadUtil {
                 downloadListener.onProgress(p, total);
             }
         } catch (Exception e) {
+            file.delete();
             downloadListener.onFailed(e, url);
             return false;
         }

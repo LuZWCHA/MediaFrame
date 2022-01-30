@@ -40,7 +40,7 @@ public class ImageSign {
     public static final Logger LOGGER = LogManager.getLogger();
 
 
-    public ImageSign(){
+    public ImageSign() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, Config.CLIENT_CONFIG);
         MinecraftForge.EVENT_BUS.register(this);
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
@@ -51,8 +51,7 @@ public class ImageSign {
         INSTANCE = this;
     }
 
-    private void setup(final FMLCommonSetupEvent event)
-    {
+    private void setup(final FMLCommonSetupEvent event) {
         // some pre-init code
         proxy.setup(event);
     }
@@ -72,16 +71,16 @@ public class ImageSign {
         loadConfig();
     }
 
-    public void loadConfig(){
+    public void loadConfig() {
         PROXY_ADDRESS = Config.PROXY_ADDRESS.get();
         PROXY_PORT = Config.PROXY_PORT.get();
-        long CALL_TIMEOUT = Config.CALL_TIMEOUT.get();
+        int CALL_TIMEOUT = Config.CALL_TIMEOUT.get();
 
         ImageIOLoader.setCallTimeOut(CALL_TIMEOUT);
 
         RenderQueue.setMaxRenderObjCount(Config.MAX_IMAGE_RENDER_COUNT.get());
         // TODO: 2022/1/19 socks proxy next update will added.
-        ProxyManager.INSTANCE.setProxy(new Proxy(PROXY_ADDRESS, PROXY_PORT, "",0,"",0));
+        ProxyManager.INSTANCE.setProxy(new Proxy(PROXY_ADDRESS, PROXY_PORT, PROXY_ADDRESS, PROXY_PORT, PROXY_ADDRESS, PROXY_PORT));
         ImageFetcher.CacheSetting cacheSetting = new ImageFetcher.CacheSetting(
                 Config.MAX_CACHE_SIZE.get(), Config.MAX_IMAGES_MEMORY.get(), Config.MAX_IMAGE_SIZE.get(),
                 Minecraft.getInstance().gameDir.getAbsolutePath(), TEMP_DIR, TEMP_DIR_2
@@ -92,7 +91,7 @@ public class ImageSign {
             @Override
             public void remove(ImageEntity imageEntity, long... positions) {
                 RenderSystem.recordRenderCall(() -> {
-                    if(positions == null || positions.length == 0){
+                    if (positions == null || positions.length == 0) {
                         for (int i = 0; i < imageEntity.getOrgImages().size(); i++) {
                             ResourceLocation location = new ResourceLocation(
                                     Utils.urlToByteString(imageEntity.url),

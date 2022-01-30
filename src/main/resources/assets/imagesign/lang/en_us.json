@@ -1,0 +1,8 @@
+{
+  "imagesign.stage.idle.name": "idle",
+  "imagesign.stage.failed.name": "download/load failed",
+  "imagesign.stage.uploading.name": "uploading image(s)",
+  "imagesign.stage.loading.name": "loading image(s)",
+  "imagesign.stage.caching.name": "caching image(s)",
+  "imagesign.stage.downloading.name": "downloading image(s)"
+}

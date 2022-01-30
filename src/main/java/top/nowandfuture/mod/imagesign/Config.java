@@ -18,10 +18,13 @@ public class Config {
     public static final ForgeConfigSpec.ConfigValue<Long> MAX_IMAGES_MEMORY;
     public static final ForgeConfigSpec.ConfigValue<Long> MAX_IMAGE_SIZE;
     public static final ForgeConfigSpec.ConfigValue<Integer> MAX_IMAGE_RENDER_COUNT;
-    public static final ForgeConfigSpec.ConfigValue<Long> CALL_TIMEOUT;
+    public static final ForgeConfigSpec.ConfigValue<Integer> CALL_TIMEOUT;
+    public static final ForgeConfigSpec.ConfigValue<String> HEADER_USER_AGENT;
 
     public static ForgeConfigSpec SERVER_CONFIG;
     public static ForgeConfigSpec CLIENT_CONFIG;
+
+    private final static String DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36";
 
 
     static {
@@ -58,7 +61,11 @@ public class Config {
         MAX_IMAGES_MEMORY = CLIENT_BUILDER.comment("Images max memory limit (byte).").defineInRange("image_memory_limit", 200L << 20, 1 << 10, Long.MAX_VALUE);
         MAX_IMAGE_SIZE = CLIENT_BUILDER.comment("Image max size (byte).").defineInRange("image_size", 6L << 20, 1 << 10, Long.MAX_VALUE);
         MAX_IMAGE_RENDER_COUNT = CLIENT_BUILDER.comment("Max image count that will be render at one frame.").defineInRange("max_render_count", 50, 1, Integer.MAX_VALUE);
-        CALL_TIMEOUT = CLIENT_BUILDER.comment("Request total timeout limit (millisecond). Recommend: more than 1000ms on the internet.").define("call_timeout", 2000L);
+        CALL_TIMEOUT = CLIENT_BUILDER.comment("Request total timeout limit (millisecond). Recommend: more than 1000ms on the internet.").define("call_timeout", 2000);
+        HEADER_USER_AGENT = CLIENT_BUILDER.comment("Custom User-Agent for downloading images. " +
+                "For example: \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36\", " +
+                "you can also get one from https://fake-useragent.herokuapp.com/browsers/0.1.8, provide by fake-agent")
+                .define("custom_user_agent", DEFAULT_USER_AGENT);
 
         CLIENT_BUILDER.pop();
 

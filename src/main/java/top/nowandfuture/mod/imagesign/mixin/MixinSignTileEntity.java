@@ -8,13 +8,17 @@ import net.minecraft.util.text.ITextComponent;
 import net.minecraftforge.common.extensions.IForgeTileEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
+import top.nowandfuture.mod.imagesign.loader.ISignBlockEntityAccessor;
 import top.nowandfuture.mod.imagesign.loader.ImageFetcher;
 import top.nowandfuture.mod.imagesign.loader.ImageLoadManager;
+import top.nowandfuture.mod.imagesign.loader.Stage;
 
 @Mixin(SignTileEntity.class)
-public abstract class MixinSignTileEntity extends TileEntity implements IForgeTileEntity {
+public abstract class MixinSignTileEntity extends TileEntity implements IForgeTileEntity, ISignBlockEntityAccessor {
 
     @Shadow public abstract ITextComponent getText(int line);
+    @Unique private Stage stage = Stage.IDLE;
 
     public MixinSignTileEntity(TileEntityType<?> tileEntityTypeIn) {
         super(tileEntityTypeIn);
@@ -48,5 +52,15 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
     @Override
     public AxisAlignedBB getRenderBoundingBox() {
         return IForgeTileEntity.super.getRenderBoundingBox();
+    }
+
+    @Override
+    public Stage getStage() {
+        return stage;
+    }
+
+    @Override
+    public void setStage(Stage stage) {
+        this.stage = stage;
     }
 }
