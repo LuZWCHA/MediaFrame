@@ -1,6 +1,7 @@
 package top.nowandfuture.mod.imagesign.mixin;
 
 import com.mojang.blaze3d.matrix.MatrixStack;
+import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.vertex.IVertexBuilder;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.StandingSignBlock;
@@ -25,6 +26,7 @@ import net.minecraft.util.math.vector.Vector3f;
 import net.minecraft.util.text.ITextComponent;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -38,6 +40,9 @@ import top.nowandfuture.mod.imagesign.caches.Vector3i;
 import top.nowandfuture.mod.imagesign.utils.ParamsParser;
 import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 import top.nowandfuture.mod.imagesign.utils.Utils;
+
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL11.GL_REPEAT;
 
 
 /**
@@ -143,6 +148,16 @@ public abstract class MixinSignTileEntityRenderer extends TileEntityRenderer<Sig
         matrixStackIn.scale(1 / scale, -1 / scale, 1 / scale);
 
         IVertexBuilder builder = bufferIn.getBuffer(RenderType.getEntityTranslucent(location));
+
+        int mipmapLevel = Minecraft.getInstance().gameSettings.mipmapLevels;
+
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, 0);
+        GlStateManager.texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, mipmapLevel);
+        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
         RenderHelper.blit3(builder, matrixStackIn,
                 0, 0, 0, 0, 0f,
                 w, h, h, w,
@@ -194,11 +209,7 @@ public abstract class MixinSignTileEntityRenderer extends TileEntityRenderer<Sig
         fontrenderer.drawEntityText(processor2, -fontrenderer.func_243245_a(processor2) / 2f, fontrenderer.FONT_HEIGHT + 1, 10526880, false, matrixStackIn.getLast().getMatrix(), bufferIn, false, 0, combinedLightIn);
 
         matrixStackIn.pop();
-
-
         matrixStackIn.pop();
-
-
     }
 
     @Inject(method = "render(Lnet/minecraft/tileentity/SignTileEntity;FLcom/mojang/blaze3d/matrix/MatrixStack;Lnet/minecraft/client/renderer/IRenderTypeBuffer;II)V",
@@ -276,7 +287,7 @@ public abstract class MixinSignTileEntityRenderer extends TileEntityRenderer<Sig
                 if (imageEntity.hasOpenGLSource()) {
                     //Do render
                     renderImages(imageEntity, tileEntityIn, params.width, params.height, params.offsetX, params.offsetY, params.offsetZ,
-                            partialTicks, matrixStackIn, bufferIn, combinedLightIn, combinedOverlayIn, params.doOffset);
+                            partialTicks, matrixStackIn, bufferIn, params.combineLight, combinedOverlayIn, params.doOffset);
 
                     callbackInfo.cancel();
                 } else {

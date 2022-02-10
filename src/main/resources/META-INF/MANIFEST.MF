@@ -1,9 +1,9 @@
 Manifest-Version: 1.0
 Implementation-Title: MediaFrame
-Implementation-Version: 0.01
+Implementation-Version: 0.4
 Specification-Vendor: imagesign
 Specification-Title: imagesign
-Implementation-Timestamp: 2021-08-19T11:52:57+0800
+Implementation-Timestamp: 2022-02-10T11:52:57+0800
 MixinConnector: top.nowandfuture.mod.imagesign.mixin.MCMFConnector
 Specification-Version: 1
 Implementation-Vendor: imagesign

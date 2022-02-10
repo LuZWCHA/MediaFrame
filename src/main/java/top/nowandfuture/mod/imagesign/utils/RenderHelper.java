@@ -229,7 +229,7 @@ public class RenderHelper {
     }
 
     public static void innerBlit3(IVertexBuilder builder, MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int light) {
-        innerBlit3(builder, stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, 0, -1, light);
+        innerBlit3(builder, stack, x1, x2, y1, y2, blitOffset,minU, maxU, minV, maxV, 0, -1, 0, light);
     }
 
     public static void innerBlit3(IVertexBuilder builder, MatrixStack stack, int x1, int x2, int y1, int y2, int blitOffset, float minU, float maxU, float minV, float maxV, int nx, int ny, int nz, int light) {

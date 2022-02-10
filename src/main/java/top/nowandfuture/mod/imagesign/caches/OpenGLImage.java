@@ -15,6 +15,7 @@ import net.minecraft.resources.IResourceManager;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 import top.nowandfuture.mod.imagesign.schedulers.MyWorldRenderScheduler;
 import top.nowandfuture.mod.imagesign.utils.ImageUtils;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL14.GL_GENERATE_MIPMAP;
 
 //The methods in the class should be called in Render Thread!
 public class OpenGLImage extends Texture {
@@ -162,15 +164,12 @@ public class OpenGLImage extends Texture {
                     GlStateManager.bindTexture(tempId);
                     int alignment = glGetInteger(GL_UNPACK_ALIGNMENT);
                     if (mipmapLevel >= 0) {
-                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                        //my gpu not support... so I have to disable it.
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
-                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mipmapLevel);
+
+
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0.0F);
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, mipmapLevel);
+//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, 0.9F);
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 0.0F);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_ROWS, 0);
@@ -194,6 +193,8 @@ public class OpenGLImage extends Texture {
 //                            GL11.glTexSubImage2D(GL_TEXTURE_2D, i, 0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, byteBuffer);
                         }
                     }
+
+                    GL30.glGenerateMipmap(GL_TEXTURE_2D);
 
                     GlStateManager.pixelStore(GL_UNPACK_ROW_LENGTH, 0);
                     GlStateManager.pixelStore(GL_UNPACK_ALIGNMENT, alignment);
