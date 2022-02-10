@@ -1,0 +1,8 @@
+{
+  "imagesign.stage.idle.name": "空闲",
+  "imagesign.stage.failed.name": "载入图片失败",
+  "imagesign.stage.uploading.name": "准备显示图片",
+  "imagesign.stage.loading.name": "正在加载图片",
+  "imagesign.stage.caching.name": "正在缓存图片",
+  "imagesign.stage.downloading.name": "正在下载图片"
+}

@@ -1,0 +1,258 @@
+buildscript {
+    repositories {
+        // These repositories are only for Gradle plugins, put any other repositories in the repository block further below
+        maven { url = 'https://maven.minecraftforge.net' }
+        mavenCentral()
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
+        maven { url = 'https://maven.parchmentmc.org' }
+    }
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+', changing: true
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+        classpath "org.parchmentmc:librarian:${librarian_version}"
+    }
+}
+apply plugin: 'net.minecraftforge.gradle'
+// Only edit below this line, the above code adds and enables the necessary things for Forge to be setup.
+apply plugin: 'maven-publish'
+apply plugin: 'eclipse'
+apply plugin: 'org.spongepowered.mixin'
+apply plugin: 'org.parchmentmc.librarian.forgegradle'
+
+version = '0.4'
+group = 'top.nowandfuture.imagesign'
+archivesBaseName = "imagesign-${project.mcversion}"
+
+// Mojang ships Java 17 to end users in 1.18+, so your mod should target Java 17.
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+sourceSets {
+    api
+    main {
+        compileClasspath += sourceSets.api.output
+        runtimeClasspath += sourceSets.api.output
+        resources {
+            srcDir 'src/generated/resources'
+        }
+    }
+    test {
+        compileClasspath += sourceSets.api.output
+        runtimeClasspath += sourceSets.api.output
+    }
+}
+
+println('Java: ' + System.getProperty('java.version') + ' JVM: ' + System.getProperty('java.vm.version') + '(' + System.getProperty('java.vendor') + ') Arch: ' + System.getProperty('os.arch'))
+minecraft {
+    mappings channel: 'parchment', version: "${parchment_version}-${mcversion}"
+
+    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg') // Currently, this location cannot be changed from the default.
+
+    // Default run configurations.
+    // These can be tweaked, removed, or duplicated as needed.
+    runs {
+        client {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            // The markers can be added/remove as needed separated by commas.
+            // "SCAN": For mods scan.
+            // "REGISTRIES": For firing of registry events.
+            // "REGISTRYDUMP": For getting the contents of all registries.
+            property 'forge.logging.markers', 'REGISTRIES'
+
+            // Recommended logging level for the console
+            // You can set various levels here.
+            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                imagesign {
+                    source sourceSets.main
+                    source sourceSets.api
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            // The markers can be added/remove as needed separated by commas.
+            // "SCAN": For mods scan.
+            // "REGISTRIES": For firing of registry events.
+            // "REGISTRYDUMP": For getting the contents of all registries.
+            property 'forge.logging.markers', 'REGISTRIES'
+
+            // Recommended logging level for the console
+            // You can set various levels here.
+            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+            property 'forge.logging.console.level', 'debug'
+
+            mods {
+                imagesign {
+                    source sourceSets.main
+                    source sourceSets.api
+                }
+            }
+        }
+
+        data {
+            workingDirectory project.file('run')
+
+            // Recommended logging data for a userdev environment
+            // The markers can be added/remove as needed separated by commas.
+            // "SCAN": For mods scan.
+            // "REGISTRIES": For firing of registry events.
+            // "REGISTRYDUMP": For getting the contents of all registries.
+            property 'forge.logging.markers', 'REGISTRIES'
+
+            // Recommended logging level for the console
+            // You can set various levels here.
+            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
+            property 'forge.logging.console.level', 'debug'
+
+            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
+            args '--mod', 'imagesign', '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+
+            mods {
+                imagesign {
+                    source sourceSets.main
+                    source sourceSets.api
+                }
+            }
+        }
+    }
+}
+
+// Include resources generated by data generators.
+sourceSets.main.resources { srcDir 'src/generated/resources' }
+
+repositories {
+    mavenCentral()
+    maven{
+        url = 'https://oss.sonatype.org/content/repositories/snapshots'
+    }
+}
+
+test {
+    useJUnitPlatform()
+}
+
+configurations {
+    shade
+    implementation.extendsFrom(shade)
+    //to implement the main module's dependencies
+    apiImplementation.extendsFrom(implementation)
+    apiRuntimeOnly.extendsFrom(runtimeOnly)
+}
+
+dependencies {
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.0'
+
+//    implementation 'org.spongepowered:mixin:0.8.5'
+    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+
+    minecraft "net.minecraftforge:forge:${mcversion}-${forge_version}"
+
+    shade files('libs/icafe-1.1-SNAPSHOT.jar')
+    shade "com.squareup.okhttp3:okhttp:4.9.1"
+    shade "io.reactivex.rxjava3:rxjava:3.0.1"
+    shade group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+    shade group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
+}
+
+task fixClassPath {
+//    delete {
+//        delete files("$buildDir/classpath/runClient_minecraftClasspath.txt")
+//    }
+    doLast {
+        def cpf = new File("$buildDir/classpath/runClient_minecraftClasspath.txt")
+        configurations.shade.each {
+            cpf.append("\n$it")
+        }
+    }
+}
+
+//tasks.compileJava.dependsOn fixClassPath
+
+task apiJar(type: Jar) {
+    archiveClassifier.set 'api'
+    from sourceSets.api.output
+//
+//    from sourceSets.api.allJava
+}
+
+task sourcesJar(type: Jar) {
+    archiveClassifier.set 'sources'
+    from sourceSets.main.allJava
+    from sourceSets.api.allJava
+}
+
+task deobfJar(type: Jar) {
+    archiveClassifier.set 'deobf'
+    from sourceSets.main.output
+    from sourceSets.api.output
+    from configurations.shade.collect { it.isDirectory() ? it : zipTree(it) }
+
+    manifest {
+        attributes([
+                "Specification-Title"     : "imagesign",
+                "Specification-Vendor"    : "nowandfuture",
+                "Specification-Version"   : "1", // We are version 1 of ourselves
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.version,
+                "Implementation-Vendor"   : "nowandfuture",
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector"
+        ])
+    }
+}
+
+jar {
+    from sourceSets.main.output
+    from sourceSets.api.output
+    from configurations.shade.collect { it.isDirectory() ? it : zipTree(it) }
+
+    manifest {
+        attributes([
+                "Specification-Title"     : "imagesign",
+                "Specification-Vendor"    : "nowandfuture",
+                "Specification-Version"   : "1", // We are version 1 of ourselves
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.version,
+                "Implementation-Vendor"   : "nowandfuture",
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector"
+        ])
+    }
+}
+
+mixin {
+    add sourceSets.main, "mixins.imagesign.refmap.json"
+}
+
+artifacts {
+    archives apiJar
+    archives sourcesJar
+    archives deobfJar
+}
+
+// Example configuration to allow publishing using the maven-publish plugin
+// This is the preferred method to reobfuscate your jar file
+jar.finalizedBy('reobfJar')
+// However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing
+// publish.dependsOn('reobfJar')
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}
