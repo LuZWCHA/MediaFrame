@@ -225,6 +225,10 @@ public class RenderHelper {
         innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, uWidth, vHeight, uOffset, vOffset, textureWidth, textureHeight, light);
     }
 
+    public static void blit3(IVertexBuilder builder, MatrixStack matrixStack, int x, int y, int blitOffset, float uOffset, float vOffset, int uWidth, int vHeight, int textureHeight, int textureWidth, float nx, float ny, float nz,int light) {
+        innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, (int)nx, (int)ny, (int)nz, light);
+    }
+
     private static void innerBlit3(IVertexBuilder builder, MatrixStack matrixStack, int x1, int x2, int y1, int y2, int blitOffset, int uWidth, int vHeight, float uOffset, float vOffset, int textureWidth, int textureHeight, int light) {
         innerBlit3(builder, matrixStack, x1, x2, y1, y2, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, light);
     }
@@ -477,9 +481,10 @@ public class RenderHelper {
             GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
 
+            //normal: lie 0,0,1 stand 0,-1,0
             RenderHelper.blit3(builder, matrixStackIn,
                     0, 0, 0, 0, 0f,
-                    w, h, h, w,
+                    w, h, h, w, 0, lie ? 0: -1, lie ? 1: 0,
                     combinedLightIn);
         }
 

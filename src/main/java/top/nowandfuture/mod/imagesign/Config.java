@@ -67,7 +67,7 @@ public class Config {
                 "For example: \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36\", " +
                 "you can also get one from https://fake-useragent.herokuapp.com/browsers/0.1.8, provide by fake-agent")
                 .define("custom_user_agent", DEFAULT_USER_AGENT);
-        MIN_RENDER_IMAGE_AREA = CLIENT_BUILDER.comment("The minium area of the image render on the screen, if the area is less than the setting, the image will not render").defineInRange("min_area", 100.0, 1, 1024 * 1024 * 8);
+        MIN_RENDER_IMAGE_AREA = CLIENT_BUILDER.comment("The minimum area of the image render on the screen, if the area is less than the setting, the image will not render").defineInRange("min_area", 100.0, 1, 1024 * 1024 * 8);
         CLIENT_BUILDER.pop();
 
         SERVER_CONFIG = SERVER_BUILDER.build();
