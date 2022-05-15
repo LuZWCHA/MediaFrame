@@ -6,6 +6,7 @@ public enum Stage {
     LOADING("loading", 2), //load from memory
     UPLOADING("uploading", 3), //upload the image to gpu
     FAILED("failed", 4), //failed at any stage
+    SUCCESS("success", 5),
     IDLE("idle", -1);
 
     String str;

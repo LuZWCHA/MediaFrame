@@ -8,13 +8,14 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.math.Matrix3f;
 import com.mojang.math.Matrix4f;
+import com.mojang.math.Vector3f;
+import com.mojang.math.Vector4f;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderStateShard;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.*;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
+import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -22,6 +23,18 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.decoration.Painting;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.StandingSignBlock;
+import net.minecraft.world.level.block.WallSignBlock;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import org.lwjgl.opengl.GL11;
+import top.nowandfuture.mod.imagesign.caches.*;
+import top.nowandfuture.mod.imagesign.mixin.IGameRendererAccessor;
+
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_BASE_LEVEL;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_MAX_LEVEL;
+import static org.lwjgl.opengl.GL14.GL_TEXTURE_LOD_BIAS;
 
 public class RenderHelper {
     public static final RenderType QUAD = RenderType.create("quad",
@@ -55,7 +68,7 @@ public class RenderHelper {
                     }))
                     .createCompositeState(false));
 
-    
+
 
     public static int colorInt(int r, int g, int b, int a) {
         return (a & 255) << 24 | (r & 255) << 16 | (g & 255) << 8 | (b & 255);
@@ -205,6 +218,10 @@ public class RenderHelper {
         innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, uWidth, vHeight, uOffset, vOffset, textureWidth, textureHeight, light);
     }
 
+    public static void blit3(VertexConsumer builder, PoseStack matrixStack, int x, int y, int blitOffset, float uOffset, float vOffset, int uWidth, int vHeight, int textureHeight, int textureWidth, float nx, float ny, float nz,int light) {
+        innerBlit3(builder, matrixStack, x, x + uWidth, y, y + vHeight, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, (int)nx, (int)ny, (int)nz, light);
+    }
+
     private static void innerBlit3(VertexConsumer builder, PoseStack matrixStack, int x1, int x2, int y1, int y2, int blitOffset, int uWidth, int vHeight, float uOffset, float vOffset, int textureWidth, int textureHeight, int light) {
         innerBlit3(builder, matrixStack, x1, x2, y1, y2, blitOffset, (uOffset + 0.0F) / (float) textureWidth, (uOffset + (float) uWidth) / (float) textureWidth, (vOffset + 0.0F) / (float) textureHeight, (vOffset + (float) vHeight) / (float) textureHeight, light);
     }
@@ -344,5 +361,172 @@ public class RenderHelper {
 
     private void renderVertex(Matrix4f matrix4f, Matrix3f matrix3f, VertexConsumer builder, float x, float y, float u, float v, float z, int nx, int ny, int nz, int light) {
         builder.vertex(matrix4f, x, y, z).color(255, 255, 255, 255).uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(light).normal(matrix3f, (float)nx, (float)ny, (float)nz).endVertex();
+    }
+
+    public static void renderImages(ImageEntity imageEntity, SignBlockEntity tileEntityIn, double width, double height,
+                                    double offsetX, double offsetY, double offsetZ, float partialTicks, PoseStack matrixStackIn,
+                                    MultiBufferSource bufferIn, int combinedLightIn, int combinedOverlayIn, boolean doOffset, boolean lie) {
+        BlockState blockstate = tileEntityIn.getBlockState();
+
+        if (imageEntity.getOrgImages().isEmpty()) {
+            return;
+        }
+
+        int index = 0;
+        int size = imageEntity.getOrgImages().size();
+        if (size > 1) {
+            long posLong = tileEntityIn.getBlockPos().asLong();
+            Object p = imageEntity.imageInfo.getPram();
+            if (p instanceof IParam) {
+                if (p instanceof GIFParam) {
+                    long curTick = GIFImagePlayManager.INSTANCE.getTick();
+                    if (!GIFImagePlayManager.INSTANCE.contains(posLong)) {
+                        GIFImagePlayManager.INSTANCE.setStartTickForPos(posLong, curTick);
+                    }
+
+                    long startTick = GIFImagePlayManager.INSTANCE.getStartTick(posLong);
+
+                    long delay = ((GIFParam) p).getDelay() * 100L;
+                    int leftPos = ((GIFParam) p).getLeftPosition();
+                    int topPos = ((GIFParam) p).getTopPosition();
+                    long t = delay * size;
+
+                    long mills = (curTick - startTick) * 50;//50ms per tick
+                    if (mills >= t) {
+                        GIFImagePlayManager.INSTANCE.setStartTickForPos(posLong, curTick);
+                    }
+                    index = (int) ((mills / delay) % size);
+                }
+            }
+        }
+        OpenGLImage entity = imageEntity.getOrgImages().get(index);
+        ResourceLocation location = new ResourceLocation(
+                Utils.urlToByteString(imageEntity.url),
+                String.valueOf(index)
+        );
+        TextureManager manager = Minecraft.getInstance().getTextureManager();
+        AbstractTexture texture = manager.getTexture(location);
+        manager.register(
+                location,
+                entity
+        );
+        if (texture == null) {
+            return;
+        } else {
+            boolean isT = GL11.glIsTexture(texture.getId());
+
+            if (!isT) {
+                return;
+            }
+        }
+
+        int w = entity.getWidth();
+        int h = entity.getHeight();
+        float wd = w / (float) width;
+        float hd = h / (float) height;
+        float scale = Math.max(wd, hd);
+        matrixStackIn.pushPose();
+        matrixStackIn.translate(.5, .5, .5);
+        float yaw;
+        if (blockstate.getBlock() instanceof StandingSignBlock) {
+            yaw = -((float) (blockstate.getValue(StandingSignBlock.ROTATION) * 360) / 16.0F);
+            matrixStackIn.mulPose(Vector3f.YP.rotationDegrees(yaw));
+        } else {
+            yaw = -blockstate.getValue(WallSignBlock.FACING).toYRot();
+            matrixStackIn.mulPose(Vector3f.YP.rotationDegrees(yaw));
+            matrixStackIn.translate(0.0D, -.2725D, -.4375D);
+            //0 -30 42
+        }
+
+        if (lie) {
+            matrixStackIn.translate(0, -0.5, 0);
+            matrixStackIn.mulPose(Vector3f.XN.rotationDegrees(90));
+        }
+
+        if (scale == wd) {
+            matrixStackIn.translate(0, -(height - h / scale) / 2, 0);
+        } else {
+            matrixStackIn.translate((width - w / scale) / 2, 0, 0);
+        }
+
+        if (doOffset) matrixStackIn.translate(offsetX, lie ? offsetZ : offsetY, lie ? offsetY : offsetZ);
+        matrixStackIn.translate(-.5, lie ? .5 : .7725F, doOffset ? .001 : .046666667F);
+
+        matrixStackIn.scale(1 / scale, -1 / scale, 1 / scale);
+
+        Vector4f p0 = new Vector4f(0, 0, 0, 1);
+        Vector4f p1 = new Vector4f(0, h, 0, 1);
+        Vector4f p2 = new Vector4f(w, h, 0, 1);
+        Vector4f p3 = new Vector4f(w, 0, 0, 1);
+
+        double area = calculateAreaOf(matrixStackIn.last().pose(), p0, p1, p2, p3, partialTicks);
+        System.out.println(area);
+        if(area >= MIN_AREA) {
+            VertexConsumer builder = bufferIn.getBuffer(RenderType.entityTranslucent(location));
+
+            final float oldBias = GL11.glGetTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS);
+            final int oldMagFilter = GL11.glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER);
+            final int oldMinFilter = GL11.glGetTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER);
+
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 4);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 2.0f);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+
+            //normal: lie 0,0,1 stand 0,-1,0
+            RenderHelper.blit3(builder, matrixStackIn,
+                    0, 0, 0, 0, 0f,
+                    w, h, h, w, 0, lie ? 0: -1, lie ? 1: 0,
+                    combinedLightIn);
+
+            //restore the bias and filters
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, oldBias);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, oldMagFilter);
+            GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, oldMinFilter);
+        }
+
+        matrixStackIn.popPose();
+    }
+
+    public static double MIN_AREA = 100.0;
+
+    public static double calculateAreaOf(Matrix4f matrix, Vector4f point0, Vector4f point1, Vector4f point2, Vector4f point3, float partialTicks) {
+        GameRenderer renderer = Minecraft.getInstance().gameRenderer;
+
+        Matrix4f projectionMatrix = renderer.getProjectionMatrix(
+                ((IGameRendererAccessor)renderer).invokeGetFov(renderer.getMainCamera(), partialTicks, true)
+        );
+
+        double x = Minecraft.getInstance().getWindow().getGuiScaledWidth();
+        double y = Minecraft.getInstance().getWindow().getGuiScaledHeight();
+
+        point0.transform(matrix);
+        point1.transform(matrix);
+        point2.transform(matrix);
+        point3.transform(matrix);
+
+        point0.transform(projectionMatrix);
+        point1.transform(projectionMatrix);
+        point2.transform(projectionMatrix);
+        point3.transform(projectionMatrix);
+
+        Vector3d p0 = vec4ToVec3(point0, x, y);
+        Vector3d p1 = vec4ToVec3(point1, x, y);
+        Vector3d p2 = vec4ToVec3(point2, x, y);
+        Vector3d p3 = vec4ToVec3(point3, x, y);
+
+        double a = p0.distance(p1);
+        double b = p1.distance(p2);
+        double c = p2.distance(p3);
+        double d = p3.distance(p0);
+
+        double z = (a + b + c + d) / 2;
+
+        return 2 * Math.sqrt((z - a) * (z - b) * (z - c) * (z - d));
+    }
+
+    private static Vector3d vec4ToVec3(Vector4f vector4f, double xScale, double yScale) {
+        return new Vector3d(xScale * vector4f.x() / vector4f.w(), yScale * vector4f.y() / vector4f.w(), 0);
     }
 }

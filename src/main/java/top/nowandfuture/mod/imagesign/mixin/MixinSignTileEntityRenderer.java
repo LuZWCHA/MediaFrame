@@ -26,6 +26,7 @@ import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -46,6 +47,9 @@ import top.nowandfuture.mod.imagesign.utils.Utils;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL11.GL_REPEAT;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_BASE_LEVEL;
+import static org.lwjgl.opengl.GL12.GL_TEXTURE_MAX_LEVEL;
+import static org.lwjgl.opengl.GL14.GL_TEXTURE_LOD_BIAS;
 
 
 /**
@@ -55,113 +59,13 @@ import static org.lwjgl.opengl.GL11.GL_REPEAT;
 public abstract class MixinSignTileEntityRenderer implements BlockEntityRenderer<SignBlockEntity> {
 
 
-    @Shadow @Final private Font font;
+    @Shadow
+    @Final
+    private Font font;
     private static final String HEADER = "[Image]";
     private static final String LR_HEADER = "[ImageT]";
-
-    private void renderImages(ImageEntity imageEntity, SignBlockEntity tileEntityIn, double width, double height,
-                              double offsetX, double offsetY, double offsetZ, float partialTicks, PoseStack matrixStackIn,
-                              MultiBufferSource bufferIn, int combinedLightIn, int combinedOverlayIn, boolean doOffset) {
-        BlockState blockstate = tileEntityIn.getBlockState();
-
-        if (imageEntity.getOrgImages().isEmpty()) {
-            return;
-        }
-
-        int index = 0;
-        int size = imageEntity.getOrgImages().size();
-        if (size > 1) {
-            long posLong = tileEntityIn.getBlockPos().asLong();
-            Object p = imageEntity.imageInfo.getPram();
-            if (p instanceof IParam) {
-                if (p instanceof GIFParam) {
-                    long curTick = GIFImagePlayManager.INSTANCE.getTick();
-                    if (!GIFImagePlayManager.INSTANCE.contains(posLong)) {
-                        GIFImagePlayManager.INSTANCE.setStartTickForPos(posLong, curTick);
-                    }
-
-                    long startTick = GIFImagePlayManager.INSTANCE.getStartTick(posLong);
-
-                    long delay = ((GIFParam) p).getDelay() * 100L;
-                    int leftPos = ((GIFParam) p).getLeftPosition();
-                    int topPos = ((GIFParam) p).getTopPosition();
-                    long t = delay * size;
-
-                    long mills = (curTick - startTick) * 50;//50ms per tick
-                    if (mills >= t) {
-                        GIFImagePlayManager.INSTANCE.setStartTickForPos(posLong, curTick);
-                    }
-                    index = (int) ((mills / delay) % size);
-                }
-            }
-        }
-        OpenGLImage entity = imageEntity.getOrgImages().get(index);
-        ResourceLocation location = new ResourceLocation(
-                Utils.urlToByteString(imageEntity.url),
-                String.valueOf(index)
-        );
-        TextureManager manager = Minecraft.getInstance().getTextureManager();
-        AbstractTexture texture = manager.getTexture(location);
-        manager.register(
-                location,
-                entity
-        );
-        if (texture == null) {
-            return;
-        } else {
-            boolean isT = GL11.glIsTexture(texture.getId());
-
-            if (!isT) {
-                return;
-            }
-        }
-
-        int w = entity.getWidth();
-        int h = entity.getHeight();
-        float wd = w / (float) width;
-        float hd = h / (float) height;
-        float scale = Math.max(wd, hd);
-        matrixStackIn.pushPose();
-        matrixStackIn.translate(.5, .5, .5);
-        float yaw;
-        if (blockstate.getBlock() instanceof StandingSignBlock) {
-            yaw = -((float) (blockstate.getValue(StandingSignBlock.ROTATION) * 360) / 16.0F);
-            matrixStackIn.mulPose(Vector3f.YP.rotationDegrees(yaw));
-        } else {
-            yaw = -blockstate.getValue(WallSignBlock.FACING).toYRot();
-            matrixStackIn.mulPose(Vector3f.YP.rotationDegrees(yaw));
-            matrixStackIn.translate(0.0D, -.2725D, -.4375D);
-            //0 -30 42
-        }
-
-        if (scale == wd) {
-            matrixStackIn.translate(0, -(height - h / scale) / 2, 0);
-        } else {
-            matrixStackIn.translate((width - w / scale) / 2, 0, 0);
-        }
-
-        if (doOffset) matrixStackIn.translate(offsetX, offsetY, offsetZ);
-        matrixStackIn.translate(-.5, .7725F, doOffset ? .001 : .046666667F);
-        matrixStackIn.scale(1 / scale, -1 / scale, 1 / scale);
-
-        VertexConsumer builder = bufferIn.getBuffer(RenderType.entityTranslucent(location));
-
-        int mipmapLevel = Minecraft.getInstance().options.mipmapLevels;
-
-        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, 0);
-        GlStateManager._texParameter(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, mipmapLevel);
-        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-        GlStateManager._texParameter(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-        RenderHelper.blit3(builder, matrixStackIn,
-                0, 0, 0, 0, 0f,
-                w, h, h, w,
-                combinedLightIn);
-
-        matrixStackIn.popPose();
-    }
+    private static final String HEADER_LIE = "[ImageL]";
+    private static final String LR_HEADER_LIE = "[ImageTL]";
 
     private void renderInfo(PoseStack matrixStackIn, BlockEntity tileEntityIn, Stage stage, MultiBufferSource bufferIn, int combinedLightIn, int combinedOverlayIn) {
 
@@ -186,8 +90,8 @@ public abstract class MixinSignTileEntityRenderer implements BlockEntityRenderer
         Font fontrenderer = this.font;
         FormattedCharSequence processor =
                 Component.nullToEmpty(I18n
-                                .get(LoadStageLangKeyMap
-                                        .key(stage)))
+                        .get(LoadStageLangKeyMap
+                                .key(stage)))
                         .getVisualOrderText();
         fontrenderer.drawInBatch(processor, -fontrenderer.width(processor) / 2f, 0, 10526880, true, matrixStackIn.last().pose(), bufferIn, false, 0, combinedLightIn);
         int p = stage.getProgress();
@@ -208,6 +112,21 @@ public abstract class MixinSignTileEntityRenderer implements BlockEntityRenderer
         matrixStackIn.popPose();
     }
 
+    @Override
+    public int getViewDistance() {
+        double distance = Minecraft.getInstance().options.renderDistance * 16;
+        return (int) (distance * distance);
+    }
+
+    @Override
+    public boolean shouldRender(SignBlockEntity pBlockEntity, Vec3 pCameraPos) {
+        if(((ISignBlockEntityAccessor)pBlockEntity).getStage() == Stage.SUCCESS)
+            return BlockEntityRenderer.super.shouldRender(pBlockEntity, pCameraPos);
+        else{
+            return Vec3.atCenterOf(pBlockEntity.getBlockPos()).closerThan(pCameraPos, 64);
+        }
+    }
+
     @Inject(method = "render(Lnet/minecraft/world/level/block/entity/SignBlockEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
             at = @At(
                     value = "HEAD"
@@ -221,8 +140,11 @@ public abstract class MixinSignTileEntityRenderer implements BlockEntityRenderer
             return;
 
         final String header = tileEntityIn.getMessage(0, true).getContents();
-        final boolean normalImage = HEADER.equals(header);
-        final boolean thuImage = LR_HEADER.equals(header);
+
+        final boolean normalImage = HEADER.equals(header) || HEADER_LIE.equals(header);
+        final boolean thuImage = LR_HEADER.equals(header) || LR_HEADER_LIE.equals(header);
+        final boolean lie = HEADER_LIE.equals(header) || LR_HEADER_LIE.equals(header);
+
         if (normalImage || thuImage && tileEntityIn instanceof ISignBlockEntityAccessor) {
             ISignBlockEntityAccessor entityAccessor = (ISignBlockEntityAccessor) (tileEntityIn);
             Stage stage = entityAccessor.getStage();
@@ -282,8 +204,9 @@ public abstract class MixinSignTileEntityRenderer implements BlockEntityRenderer
 
                 if (imageEntity.hasOpenGLSource()) {
                     //Do render
-                    renderImages(imageEntity, tileEntityIn, params.width, params.height, params.offsetX, params.offsetY, params.offsetZ,
-                            partialTicks, matrixStackIn, bufferIn, params.combineLight, combinedOverlayIn, params.doOffset);
+                    RenderHelper.renderImages(imageEntity, tileEntityIn, params.width, params.height, params.offsetX, params.offsetY, params.offsetZ,
+                            partialTicks, matrixStackIn, bufferIn, params.combineLight, combinedOverlayIn, params.doOffset, lie);
+                    ((ISignBlockEntityAccessor) tileEntityIn).setStage(Stage.SUCCESS);
 
                     callbackInfo.cancel();
                 } else {

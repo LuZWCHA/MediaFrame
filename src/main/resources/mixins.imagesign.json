@@ -2,13 +2,18 @@
   "package": "top.nowandfuture.mod.imagesign.mixin",
   "required": true,
   "mixins": [
+    
   ],
   "client": [
+    "IGameRendererAccessor",
     "MixinEditSignScreen",
     "MixinSignTileEntity",
     "MixinSignTileEntityRenderer"
   ],
   "server": [],
   "minVersion": "0.8",
-  "refmap": "mixins.imagesign.refmap.json"
+  "refmap": "mixins.imagesign.refmap.json",
+  "injectors": {
+    "defaultRequire": 1
+  }
 }

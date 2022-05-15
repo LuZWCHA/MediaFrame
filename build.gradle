@@ -19,7 +19,7 @@ apply plugin: 'eclipse'
 apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'org.parchmentmc.librarian.forgegradle'
 
-version = '0.4'
+version = '0.5'
 group = 'top.nowandfuture.imagesign'
 archivesBaseName = "imagesign-${project.mcversion}"
 
@@ -59,7 +59,8 @@ minecraft {
             // "REGISTRIES": For firing of registry events.
             // "REGISTRYDUMP": For getting the contents of all registries.
             property 'forge.logging.markers', 'REGISTRIES'
-
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
             // Recommended logging level for the console
             // You can set various levels here.
             // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
@@ -129,7 +130,7 @@ sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
     mavenCentral()
-    maven{
+    maven {
         url = 'https://oss.sonatype.org/content/repositories/snapshots'
     }
 }
@@ -150,7 +151,7 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.0'
 
-//    implementation 'org.spongepowered:mixin:0.8.5'
+    implementation 'org.spongepowered:mixin:0.8.5'
     annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 
     minecraft "net.minecraftforge:forge:${mcversion}-${forge_version}"
@@ -158,8 +159,8 @@ dependencies {
     shade files('libs/icafe-1.1-SNAPSHOT.jar')
     shade "com.squareup.okhttp3:okhttp:4.9.1"
     shade "io.reactivex.rxjava3:rxjava:3.0.1"
-    shade group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
-    shade group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
+//    shade group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+//    shade group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
 }
 
 task fixClassPath {
@@ -174,7 +175,9 @@ task fixClassPath {
     }
 }
 
-//tasks.compileJava.dependsOn fixClassPath
+tasks.compileJava.dependsOn fixClassPath
+
+
 
 task apiJar(type: Jar) {
     archiveClassifier.set 'api'
@@ -204,8 +207,17 @@ task deobfJar(type: Jar) {
                 "Implementation-Version"  : project.version,
                 "Implementation-Vendor"   : "nowandfuture",
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector"
+                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector",
         ])
+    }
+}
+
+mixin {
+    add sourceSets.main, 'mixins.imagesign.refmap.json'
+
+    showMessageTypes = true
+    messages {
+        MIXIN_SOFT_TARGET_IS_PUBLIC = 'error'
     }
 }
 
@@ -223,14 +235,11 @@ jar {
                 "Implementation-Version"  : project.version,
                 "Implementation-Vendor"   : "nowandfuture",
                 "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector"
+                "MixinConnector"          : "top.nowandfuture.mod.imagesign.mixin.MCMFConnector",
         ])
     }
 }
 
-mixin {
-    add sourceSets.main, "mixins.imagesign.refmap.json"
-}
 
 artifacts {
     archives apiJar
@@ -238,21 +247,23 @@ artifacts {
     archives deobfJar
 }
 
+
+
 // Example configuration to allow publishing using the maven-publish plugin
 // This is the preferred method to reobfuscate your jar file
 jar.finalizedBy('reobfJar')
 // However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing
 // publish.dependsOn('reobfJar')
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            artifact jar
-        }
-    }
-    repositories {
-        maven {
-            url "file://${project.projectDir}/mcmodsrepo"
-        }
-    }
-}
+//
+//publishing {
+//    publications {
+//        mavenJava(MavenPublication) {
+//            artifact jar
+//        }
+//    }
+//    repositories {
+//        maven {
+//            url "file://${project.projectDir}/mcmodsrepo"
+//        }
+//    }
+//}

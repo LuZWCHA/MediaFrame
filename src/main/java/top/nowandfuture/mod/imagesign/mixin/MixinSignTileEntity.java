@@ -1,6 +1,7 @@
 package top.nowandfuture.mod.imagesign.mixin;
 
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -51,6 +52,16 @@ public abstract class MixinSignTileEntity extends BlockEntity implements ISignBl
             ImageFetcher.INSTANCE.removeByPos(worldPosition.asLong());
         }
     }
+
+//    @Override
+//    public double getMaxRenderDistanceSquared() {
+//        if(stage == Stage.SUCCESS) {
+//            double distance = Minecraft.getInstance().options.renderDistance * 16;
+//            return distance * distance;
+//        }else {
+//            return super.getMaxRenderDistanceSquared();
+//        }
+//    }
 
     @Override
     public Stage getStage() {
