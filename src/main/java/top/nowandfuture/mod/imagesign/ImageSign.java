@@ -25,6 +25,7 @@ import top.nowandfuture.mod.imagesign.net.ProxyManager;
 import top.nowandfuture.mod.imagesign.setup.ClientProxy;
 import top.nowandfuture.mod.imagesign.setup.CommonProxy;
 import top.nowandfuture.mod.imagesign.setup.IProxy;
+import top.nowandfuture.mod.imagesign.utils.RenderHelper;
 import top.nowandfuture.mod.imagesign.utils.Utils;
 
 @Mod("imagesign")
@@ -75,6 +76,8 @@ public class ImageSign {
         PROXY_ADDRESS = Config.PROXY_ADDRESS.get();
         PROXY_PORT = Config.PROXY_PORT.get();
         int CALL_TIMEOUT = Config.CALL_TIMEOUT.get();
+
+        RenderHelper.MIN_AREA = Config.MIN_RENDER_IMAGE_AREA.get();
 
         ImageIOLoader.setCallTimeOut(CALL_TIMEOUT);
 

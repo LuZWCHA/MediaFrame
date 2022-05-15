@@ -44,4 +44,8 @@ public class Vector3d {
         double d3 = this.getZ() + d0 - z;
         return d1 * d1 + d2 * d2 + d3 * d3;
     }
+
+    public double distance(Vector3d v){
+        return Math.sqrt(distanceSq(v.x, v.y, v.z, false));
+    }
 }

@@ -164,13 +164,9 @@ public class OpenGLImage extends Texture {
                     GlStateManager.bindTexture(tempId);
                     int alignment = glGetInteger(GL_UNPACK_ALIGNMENT);
                     if (mipmapLevel >= 0) {
-                        //my gpu not support... so I have to disable it.
+                        //Need opengl > 1.4, my opengl not support... so I have to disable it.
 //                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_GENERATE_MIPMAP, GL_TRUE);
 
-
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MIN_LOD, 0.0F);
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_MAX_LOD, 0.9F);
-//                        GlStateManager.texParameter(GL_TEXTURE_2D, GL_TEXTURE_LOD_BIAS, 0.0F);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
                         GlStateManager.pixelStore(GL_UNPACK_SKIP_ROWS, 0);
 

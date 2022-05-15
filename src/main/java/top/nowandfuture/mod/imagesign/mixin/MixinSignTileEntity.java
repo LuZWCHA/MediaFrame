@@ -1,5 +1,6 @@
 package top.nowandfuture.mod.imagesign.mixin;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.tileentity.SignTileEntity;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.tileentity.TileEntityType;
@@ -62,5 +63,15 @@ public abstract class MixinSignTileEntity extends TileEntity implements IForgeTi
     @Override
     public void setStage(Stage stage) {
         this.stage = stage;
+    }
+
+    @Override
+    public double getMaxRenderDistanceSquared() {
+        if(stage == Stage.SUCCESS) {
+            double distance = Minecraft.getInstance().gameSettings.renderDistanceChunks * 16;
+            return distance * distance;
+        }else {
+            return super.getMaxRenderDistanceSquared();
+        }
     }
 }
