@@ -5,11 +5,15 @@ buildscript {
         mavenCentral()
         maven { url = 'https://repo.spongepowered.org/repository/maven-public' }
         maven { url = 'https://maven.parchmentmc.org' }
+        maven {
+            url = "https://plugins.gradle.org/m2/"
+        }
     }
     dependencies {
         classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '5.1.+', changing: true
         classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
         classpath "org.parchmentmc:librarian:${librarian_version}"
+        classpath "gradle.plugin.com.github.johnrengelman:shadow:7.1.2"
     }
 }
 apply plugin: 'net.minecraftforge.gradle'
@@ -18,8 +22,9 @@ apply plugin: 'maven-publish'
 apply plugin: 'eclipse'
 apply plugin: 'org.spongepowered.mixin'
 apply plugin: 'org.parchmentmc.librarian.forgegradle'
+apply plugin: 'com.github.johnrengelman.shadow'
 
-version = '0.5'
+version = '0.5.1'
 group = 'top.nowandfuture.imagesign'
 archivesBaseName = "imagesign-${project.mcversion}"
 
@@ -147,6 +152,20 @@ configurations {
     apiRuntimeOnly.extendsFrom(runtimeOnly)
 }
 
+shadowJar {
+    minimize()
+    configurations = [project.configurations.shade]
+    relocate 'io.reactivex.rxjava3', 'top.nowandfuture.shadowedlibs.io.reactivex.rxjava3'
+    relocate 'org.reactivestreams', 'top.nowandfuture.shadowedlibs.org.reactivestreams'
+}
+
+reobf {
+    shadowJar {
+        dependsOn tasks.createMcpToSrg
+        mappings = tasks.createMcpToSrg.outputs.files.singleFile
+    }
+}
+
 dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.0'
@@ -167,17 +186,15 @@ task fixClassPath {
 //    delete {
 //        delete files("$buildDir/classpath/runClient_minecraftClasspath.txt")
 //    }
-    doLast {
-        def cpf = new File("$buildDir/classpath/runClient_minecraftClasspath.txt")
-        configurations.shade.each {
-            cpf.append("\n$it")
-        }
-    }
+//    doLast {
+//        def cpf = new File("$buildDir/classpath/runClient_minecraftClasspath.txt")
+//        configurations.shade.each {
+//            cpf.append("\n$it")
+//        }
+//    }
 }
 
 tasks.compileJava.dependsOn fixClassPath
-
-
 
 task apiJar(type: Jar) {
     archiveClassifier.set 'api'
@@ -245,6 +262,7 @@ artifacts {
     archives apiJar
     archives sourcesJar
     archives deobfJar
+    archives tasks.shadowJar
 }
 
 
