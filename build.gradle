@@ -7,18 +7,23 @@ buildscript {
             name = 'sponge'
             url = 'https://repo.spongepowered.org/maven'
         }
+        maven {
+            url = "https://plugins.gradle.org/m2/"
+        }
     }
     dependencies {
         classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '4.1.+', changing: true
         classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+        classpath "com.github.jengelman.gradle.plugins:shadow:4.0.4"
     }
 }
 
 apply plugin: 'net.minecraftforge.gradle'
 apply plugin: 'maven-publish'
 apply plugin: 'org.spongepowered.mixin'
+apply plugin: 'com.github.johnrengelman.shadow'
 
-version = '0.5'
+version = '0.5.1'
 group = 'top.nowandfuture.imagesign'
 
 archivesBaseName = "imagesign-${project.mcversion}"
@@ -115,6 +120,20 @@ configurations {
     apiRuntimeOnly.extendsFrom(runtimeOnly)
 }
 
+shadowJar {
+    minimize()
+    configurations = [project.configurations.shade]
+    relocate 'io.reactivex.rxjava3', 'top.nowandfuture.shadowedlibs.io.reactivex.rxjava3'
+    relocate 'org.reactivestreams', 'top.nowandfuture.shadowedlibs.org.reactivestreams'
+}
+
+reobf {
+    shadowJar {
+        dependsOn tasks.createMcpToSrg
+        mappings = tasks.createMcpToSrg.outputs.files.singleFile
+    }
+}
+
 dependencies {
 
     testCompile 'org.junit.jupiter:junit-jupiter:5.7.0'
@@ -195,6 +214,7 @@ artifacts {
     archives apiJar
     archives sourcesJar
     archives deobfJar
+    archives tasks.shadowJar
 }
 
 // Example configuration to allow publishing using the maven-publish task
